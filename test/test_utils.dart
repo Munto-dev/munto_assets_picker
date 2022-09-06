@@ -7,7 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:munto_assets_picker/wechat_assets_picker.dart';
+import 'package:munto_assets_picker/munto_assets_picker.dart';
 
 const String _testButtonText = 'Picker test press';
 
