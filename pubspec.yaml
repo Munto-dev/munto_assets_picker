@@ -20,6 +20,9 @@ dependencies:
   photo_manager: ^2.6.0
   provider: ^6.0.5
   video_player: ^2.6.0
+  muntorial:
+    git:
+      url: https://github.com/Munto-dev/muntorial.git
 
 dev_dependencies:
   flutter_localizations:
