@@ -16,6 +16,9 @@ dependencies:
   munto_assets_picker:
     path: ../
   wechat_camera_picker: ^3.6.0
+  muntorial :
+    git :
+      url : https://github.com/Munto-dev/muntorial.git
 
   extended_image: ^8.0.0
   package_info_plus: ^4.0.0
