@@ -4,7 +4,7 @@
 //
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wechat_assets_picker/wechat_assets_picker.dart';
+import 'package:munto_assets_picker/munto_assets_picker.dart';
 
 void main() {
   test('Sort paths correctly', () {
