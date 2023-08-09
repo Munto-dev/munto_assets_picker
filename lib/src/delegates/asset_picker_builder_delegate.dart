@@ -672,7 +672,7 @@ abstract class AssetPickerBuilderDelegate<Asset, Path> {
           child: Semantics(
             sortKey: const OrdinalSortKey(0),
             child: Container(
-              padding: context.mediaQuery.padding,
+              padding: MediaQuery.paddingOf(context),
               color: MuntorialColors.black,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
