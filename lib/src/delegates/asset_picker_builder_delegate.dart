@@ -1521,15 +1521,19 @@ class DefaultAssetPickerBuilderDelegate
   Widget confirmButton(BuildContext context) {
     return Consumer<DefaultAssetPickerProvider>(
       builder: (_, DefaultAssetPickerProvider p, __) {
+        final bool isSelectedNotEmpty = p.isSelectedNotEmpty;
+        final bool shouldAllowConfirm =
+            isSelectedNotEmpty || p.previousSelectedAssets.isNotEmpty;
+
         return ConfirmButton(
-          onPressed: p.isSelectedNotEmpty
+          onPressed: shouldAllowConfirm
               ? () => Navigator.of(context).maybePop(p.selectedAssets)
               : null,
-          text: p.isSelectedNotEmpty && !isSingleAssetMode
+          text: isSelectedNotEmpty && !isSingleAssetMode
               ? '${textDelegate.confirm}'
                   ' (${p.selectedAssets.length}/${p.maxAssets})'
               : textDelegate.confirm,
-          isActive: p.isSelectedNotEmpty,
+          isActive: shouldAllowConfirm,
         );
 
         //기존 코드 남겨둠
