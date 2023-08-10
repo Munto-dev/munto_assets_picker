@@ -8,10 +8,86 @@ This document gathered all breaking changes and migrations requirement between m
 
 ## Major versions
 
-- [8.0.0](#8.0.0)
-- [7.0.0](#7.0.0)
-- [6.0.0](#6.0.0)
-- [5.0.0](#5.0.0)
+- [8.6.0](#860)
+- [8.3.0](#830)
+- [8.2.0](#820)
+- [8.0.0](#800)
+- [7.0.0](#700)
+- [6.0.0](#600)
+- [5.0.0](#500)
+
+## 8.6.0
+
+### Summary
+
+`isAppleOS` in `AssetPickerBuilderDelegate` and `AssetPickerViewerBuilderDelegate`
+has been refactored to relies on the `TargetPlatform` from a given `BuildContext`.
+Delegates that extends those should update the signature at least.
+
+### Details
+
+Before:
+
+```dart
+bool get isAppleOS;
+```
+
+After:
+```dart
+bool isAppleOS(BuildContext context);
+```
+
+## 8.3.0
+
+### Summary
+
+Delegates extending `AssetPickerBuilderDelegate` that implements `selectAsset`
+should add the `index` argument to its signature.
+
+### Details
+
+Before:
+
+```dart
+void selectAsset(
+  BuildContext context,
+  Asset asset,
+  bool selected,
+);
+```
+
+After:
+
+```dart
+void selectAsset(
+  BuildContext context,
+  Asset asset,
+  int index,
+  bool selected,
+);
+```
+
+## 8.2.0
+
+### Summary
+
+Delegates that extend `AssetPickerBuilderDelegate` should now implement `viewAsset`.
+Delegates that extend `DefaultAssetPickerBuilderDelegate` are not required to do so.
+
+### Details
+
+`viewAsset` is abstracted in the `AssetPickerBuilderDelegate`:
+
+```dart
+Future<void> viewAsset(
+  BuildContext context,
+  int index,
+  AssetEntity currentAsset,
+);
+```
+
+The new method is implemented in the `DefaultAssetPickerBuilderDelegate`.
+It's a private method previously which not allow to modify.
 
 ## 8.0.0
 

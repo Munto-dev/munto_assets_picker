@@ -2,6 +2,7 @@
 // Use of this source code is governed by an Apache license that can be found
 // in the LICENSE file.
 
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -14,7 +15,7 @@ import '../delegates/sort_path_delegate.dart';
 import '../internal/singleton.dart';
 import '../models/path_wrapper.dart';
 
-/// [ChangeNotifier] for assets picker.
+/// Helps the assets picker to manage [Path]s and [Asset]s.
 ///
 /// The provider maintain all methods that control assets and paths.
 /// By extending it you can customize how you can get all assets or paths,
@@ -26,11 +27,12 @@ abstract class AssetPickerProvider<Asset, Path> extends ChangeNotifier {
     this.pageSize = defaultAssetsPerPage,
     this.pathThumbnailSize = defaultPathThumbnailSize,
     List<Asset>? selectedAssets,
-  }) {
-    if (selectedAssets != null && selectedAssets.isNotEmpty) {
-      _selectedAssets = selectedAssets.toList();
-    }
-  }
+  })  : assert(maxAssets > 0, 'maxAssets must be greater than 0.'),
+        assert(pageSize > 0, 'pageSize must be greater than 0.'),
+        previousSelectedAssets =
+            selectedAssets?.toList(growable: false) ?? List<Asset>.empty(),
+        _selectedAssets =
+            selectedAssets?.toList() ?? List<Asset>.empty(growable: true);
 
   /// Maximum count for asset selection.
   /// 资源选择的最大数量
@@ -46,6 +48,10 @@ abstract class AssetPickerProvider<Asset, Path> extends ChangeNotifier {
   /// 路径选择器中缩略图的大小
   final ThumbnailSize pathThumbnailSize;
 
+  /// Selected assets before the picker starts picking.
+  /// 选择器开始选择前已选中的资源
+  final List<Asset> previousSelectedAssets;
+
   /// Clear all fields when dispose.
   /// 销毁时重置所有内容
   @override
@@ -54,7 +60,6 @@ abstract class AssetPickerProvider<Asset, Path> extends ChangeNotifier {
     _paths.clear();
     _currentPath = null;
     _currentAssets.clear();
-    _selectedAssets.clear();
     super.dispose();
   }
 
@@ -126,14 +131,17 @@ abstract class AssetPickerProvider<Asset, Path> extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Map for all path entity.
-  /// 所有包含资源的路径里列表
-  ///
-  /// Using [Map] in order to save the thumbnail data
-  /// for the first asset under the path.
-  /// 使用 [Map] 来保存路径下第一个资源的缩略图数据
+  /// List for all path entity wrapped by [PathWrapper].
+  /// 所有资源路径的列表，以 [PathWrapper] 包装
   List<PathWrapper<Path>> get paths => _paths;
-  final List<PathWrapper<Path>> _paths = <PathWrapper<Path>>[];
+  List<PathWrapper<Path>> _paths = <PathWrapper<Path>>[];
+
+  set paths(List<PathWrapper<Path>> value) {
+    if (value != _paths) {
+      _paths = value;
+      notifyListeners();
+    }
+  }
 
   /// Set thumbnail [data] for the specific [path].
   /// 为指定的路径设置缩略图数据
@@ -179,7 +187,7 @@ abstract class AssetPickerProvider<Asset, Path> extends ChangeNotifier {
   /// Selected assets.
   /// 已选中的资源
   List<Asset> get selectedAssets => _selectedAssets;
-  List<Asset> _selectedAssets = <Asset>[];
+  late List<Asset> _selectedAssets;
 
   set selectedAssets(List<Asset> value) {
     if (value == _selectedAssets) {
@@ -226,6 +234,8 @@ abstract class AssetPickerProvider<Asset, Path> extends ChangeNotifier {
   }
 }
 
+/// The default implementation of the [AssetPickerProvider] for the picker.
+/// The `Asset` is [AssetEntity], and the `Path` is [AssetPathEntity].
 class DefaultAssetPickerProvider
     extends AssetPickerProvider<AssetEntity, AssetPathEntity> {
   DefaultAssetPickerProvider({
@@ -276,7 +286,7 @@ class DefaultAssetPickerProvider
   ///
   /// Will be merged into the base configuration.
   /// 将会与基础条件进行合并。
-  final FilterOptionGroup? filterOptions;
+  final PMFilter? filterOptions;
 
   @override
   set currentPath(PathWrapper<AssetPathEntity>? value) {
@@ -298,23 +308,30 @@ class DefaultAssetPickerProvider
 
   @override
   Future<void> getPaths() async {
-    // Initial base options.
-    // Enable need title for audios and image to get proper display.
-    final FilterOptionGroup options = FilterOptionGroup(
-      imageOption: const FilterOption(
-        needTitle: true,
-        sizeConstraint: SizeConstraint(ignoreSize: true),
-      ),
-      audioOption: const FilterOption(
-        needTitle: true,
-        sizeConstraint: SizeConstraint(ignoreSize: true),
-      ),
-      containsPathModified: sortPathsByModifiedDate,
-    );
-
-    // Merge user's filter option into base options if it's not null.
-    if (filterOptions != null) {
-      options.merge(filterOptions!);
+    final PMFilter options;
+    final PMFilter? fog = filterOptions;
+    if (fog is FilterOptionGroup?) {
+      // Initial base options.
+      // Enable need title for audios to get proper display.
+      final FilterOptionGroup newOptions = FilterOptionGroup(
+        imageOption: const FilterOption(
+          sizeConstraint: SizeConstraint(ignoreSize: true),
+        ),
+        audioOption: const FilterOption(
+          needTitle: true,
+          sizeConstraint: SizeConstraint(ignoreSize: true),
+        ),
+        containsPathModified: sortPathsByModifiedDate,
+        createTimeCond: DateTimeCond.def().copyWith(ignore: true),
+        updateTimeCond: DateTimeCond.def().copyWith(ignore: true),
+      );
+      // Merge user's filter options into base options if it's not null.
+      if (fog != null) {
+        newOptions.merge(fog);
+      }
+      options = newOptions;
+    } else {
+      options = fog;
     }
 
     final List<AssetPathEntity> list = await PhotoManager.getAssetPathList(
@@ -322,19 +339,9 @@ class DefaultAssetPickerProvider
       filterOption: options,
     );
 
-    for (final AssetPathEntity pathEntity in list) {
-      final int index = _paths.indexWhere(
-        (PathWrapper<AssetPathEntity> p) => p.path.id == pathEntity.id,
-      );
-      final PathWrapper<AssetPathEntity> wrapper = PathWrapper<AssetPathEntity>(
-        path: pathEntity,
-      );
-      if (index == -1) {
-        _paths.add(wrapper);
-      } else {
-        _paths[index] = wrapper;
-      }
-    }
+    _paths = list
+        .map((AssetPathEntity p) => PathWrapper<AssetPathEntity>(path: p))
+        .toList();
     // Sort path using sort path delegate.
     Singleton.sortPathDelegate.sort(_paths);
     // Use sync method to avoid unnecessary wait.
@@ -348,21 +355,36 @@ class DefaultAssetPickerProvider
     }
   }
 
+  Completer<void>? _getAssetsFromPathCompleter;
+
   @override
-  Future<void> getAssetsFromPath([int? page, AssetPathEntity? path]) async {
-    page ??= currentAssetsListPage;
-    path ??= currentPath!.path;
-    final List<AssetEntity> list = await path.getAssetListPaged(
-      page: page,
-      size: pageSize,
-    );
-    if (page == 0) {
-      _currentAssets = list;
-    } else {
+  Future<void> getAssetsFromPath([int? page, AssetPathEntity? path]) {
+    Future<void> run() async {
+      final int currentPage = page ?? currentAssetsListPage;
+      final AssetPathEntity currentPath = path ?? this.currentPath!.path;
+      final List<AssetEntity> list = await currentPath.getAssetListPaged(
+        page: currentPage,
+        size: pageSize,
+      );
+      if (currentPage == 0) {
+        _currentAssets.clear();
+      }
       _currentAssets.addAll(list);
+      _hasAssetsToDisplay = _currentAssets.isNotEmpty;
+      notifyListeners();
     }
-    _hasAssetsToDisplay = currentAssets.isNotEmpty;
-    notifyListeners();
+
+    if (_getAssetsFromPathCompleter == null) {
+      _getAssetsFromPathCompleter = Completer<void>();
+      run().then((_) {
+        _getAssetsFromPathCompleter!.complete();
+      }).catchError((Object e, StackTrace s) {
+        _getAssetsFromPathCompleter!.completeError(e, s);
+      }).whenComplete(() {
+        _getAssetsFromPathCompleter = null;
+      });
+    }
+    return _getAssetsFromPathCompleter!.future;
   }
 
   @override
@@ -400,36 +422,48 @@ class DefaultAssetPickerProvider
   Future<Uint8List?> getThumbnailFromPath(
     PathWrapper<AssetPathEntity> path,
   ) async {
-    if (requestType == RequestType.audio) {
+    try {
+      if (requestType == RequestType.audio) {
+        return null;
+      }
+      final int assetCount = path.assetCount ?? await path.path.assetCountAsync;
+      if (assetCount == 0) {
+        return null;
+      }
+      final List<AssetEntity> assets = await path.path.getAssetListRange(
+        start: 0,
+        end: 1,
+      );
+      if (assets.isEmpty) {
+        return null;
+      }
+      final AssetEntity asset = assets.single;
+      // Obtain the thumbnail only when the asset is image or video.
+      if (asset.type != AssetType.image && asset.type != AssetType.video) {
+        return null;
+      }
+      final Uint8List? data = await asset.thumbnailDataWithSize(
+        pathThumbnailSize,
+      );
+      final int index = _paths.indexWhere(
+        (PathWrapper<AssetPathEntity> p) => p.path == path.path,
+      );
+      if (index != -1) {
+        _paths[index] = _paths[index].copyWith(thumbnailData: data);
+        notifyListeners();
+      }
+      return data;
+    } catch (e, s) {
+      FlutterError.presentError(
+        FlutterErrorDetails(
+          exception: e,
+          stack: s,
+          library: packageName,
+          silent: true,
+        ),
+      );
       return null;
     }
-    final int assetCount = path.assetCount ?? await path.path.assetCountAsync;
-    if (assetCount == 0) {
-      return null;
-    }
-    final List<AssetEntity> assets = await path.path.getAssetListRange(
-      start: 0,
-      end: 1,
-    );
-    if (assets.isEmpty) {
-      return null;
-    }
-    final AssetEntity asset = assets.single;
-    // Obtain the thumbnail only when the asset is image or video.
-    if (asset.type != AssetType.image && asset.type != AssetType.video) {
-      return null;
-    }
-    final Uint8List? data = await asset.thumbnailDataWithSize(
-      pathThumbnailSize,
-    );
-    final int index = _paths.indexWhere(
-      (PathWrapper<AssetPathEntity> p) => p.path == path.path,
-    );
-    if (index != -1) {
-      _paths[index] = _paths[index].copyWith(thumbnailData: data);
-      notifyListeners();
-    }
-    return data;
   }
 
   Future<void> getAssetCountFromPath(PathWrapper<AssetPathEntity> path) async {

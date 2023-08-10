@@ -3,7 +3,6 @@
 // in the LICENSE file.
 
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:extended_image/extended_image.dart';
@@ -41,7 +40,8 @@ abstract class AssetPickerViewerBuilderDelegate<Asset, Path> {
     this.maxAssets,
     this.shouldReversePreview = false,
     this.selectPredicate,
-  });
+  })  : assert(maxAssets == null || maxAssets > 0),
+        assert(currentIndex >= 0);
 
   /// [ChangeNotifier] for photo selector viewer.
   /// 资源预览器的状态保持
@@ -94,19 +94,15 @@ abstract class AssetPickerViewerBuilderDelegate<Asset, Path> {
 
   /// The [State] for a viewer.
   /// 预览器的状态实例
-  late final AssetPickerViewerState<Asset, Path> viewerState;
-
-  /// The [TickerProvider] for animations.
-  /// 用于动画的 [TickerProvider]
-  late final TickerProvider vsync;
+  late AssetPickerViewerState<Asset, Path> viewerState;
 
   /// [AnimationController] for double tap animation.
   /// 双击缩放的动画控制器
-  late final AnimationController doubleTapAnimationController;
+  late AnimationController doubleTapAnimationController;
 
   /// [CurvedAnimation] for double tap.
   /// 双击缩放的动画曲线
-  late final Animation<double> doubleTapCurveAnimation;
+  late Animation<double> doubleTapCurveAnimation;
 
   /// [Animation] for double tap.
   /// 双击缩放的动画
@@ -151,7 +147,10 @@ abstract class AssetPickerViewerBuilderDelegate<Asset, Path> {
 
   /// Whether the current platform is Apple OS.
   /// 当前平台是否为苹果系列系统
-  bool get isAppleOS => Platform.isIOS || Platform.isMacOS;
+  bool isAppleOS(BuildContext context) => switch (context.theme.platform) {
+        TargetPlatform.iOS || TargetPlatform.macOS => true,
+        _ => false,
+      };
 
   AssetPickerTextDelegate get textDelegate => Singleton.textDelegate;
 
@@ -159,25 +158,35 @@ abstract class AssetPickerViewerBuilderDelegate<Asset, Path> {
       Singleton.textDelegate.semanticsTextDelegate;
 
   /// Call when viewer is calling [State.initState].
-  /// 当预览器调用 [State.initState] 时注册 [State] 和 [TickerProvider]。
+  /// 当预览器调用 [State.initState] 时注册 [State]。
+  @mustCallSuper
   void initStateAndTicker(
-    AssetPickerViewerState<Asset, Path> s,
-    TickerProvider v,
+    covariant AssetPickerViewerState<Asset, Path> state,
+    TickerProvider v, // TODO(Alex): Remove this in the next major version.
   ) {
-    viewerState = s;
-    vsync = v;
-    doubleTapAnimationController = AnimationController(
-      duration: const Duration(milliseconds: 200),
-      vsync: v,
-    );
-    doubleTapCurveAnimation = CurvedAnimation(
-      parent: doubleTapAnimationController,
-      curve: Curves.easeInOut,
-    );
+    initAnimations(state);
+  }
+
+  /// Call when the viewer is calling [State.didUpdateWidget].
+  /// 当预览器调用 [State.didUpdateWidget] 时操作 [State]。
+  ///
+  /// Since delegates are relatively "Stateless" compare to the
+  /// [AssetPickerViewerState], the widget that holds the delegate might changed
+  /// when using the viewer as a nested widget, which will construct
+  /// a new delegate and only calling [State.didUpdateWidget] at the moment.
+  @mustCallSuper
+  void didUpdateViewer(
+    covariant AssetPickerViewerState<Asset, Path> state,
+    covariant AssetPickerViewer<Asset, Path> oldWidget,
+    covariant AssetPickerViewer<Asset, Path> newWidget,
+  ) {
+    // Widgets are useless in the default delegate.
+    initAnimations(state);
   }
 
   /// Keep a dispose method to sync with [State].
   /// 保留一个 dispose 方法与 [State] 同步。
+  @mustCallSuper
   void dispose() {
     provider?.dispose();
     pageController.dispose();
@@ -189,6 +198,20 @@ abstract class AssetPickerViewerBuilderDelegate<Asset, Path> {
       ..stop()
       ..reset()
       ..dispose();
+  }
+
+  /// Initialize animations related to the zooming preview.
+  /// 为缩放预览初始化动画
+  void initAnimations(covariant AssetPickerViewerState<Asset, Path> state) {
+    viewerState = state;
+    doubleTapAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: state,
+    );
+    doubleTapCurveAnimation = CurvedAnimation(
+      parent: doubleTapAnimationController,
+      curve: Curves.easeInOut,
+    );
   }
 
   /// Produce [OrdinalSortKey] with the fixed name.
@@ -304,17 +327,13 @@ abstract class AssetPickerViewerBuilderDelegate<Asset, Path> {
     ExtendedImageState state, {
     bool hasLoaded = false,
   }) {
-    switch (state.extendedImageLoadState) {
-      case LoadState.completed:
-        if (hasLoaded) {
-          return state.completedWidget;
-        }
-        return FadeImageBuilder(child: state.completedWidget);
-      case LoadState.failed:
-        return failedItemBuilder(context);
-      case LoadState.loading:
-        return const SizedBox.shrink();
-    }
+    return switch (state.extendedImageLoadState) {
+      LoadState.completed => hasLoaded
+          ? state.completedWidget
+          : FadeImageBuilder(child: state.completedWidget),
+      LoadState.failed => failedItemBuilder(context),
+      LoadState.loading => const SizedBox.shrink(),
+    };
   }
 
   /// The item widget when [AssetEntity.thumbnailData] load failed.
@@ -393,34 +412,25 @@ class DefaultAssetPickerViewerBuilderDelegate
   @override
   Widget assetPageBuilder(BuildContext context, int index) {
     final AssetEntity asset = previewAssets.elementAt(index);
-    final Widget builder;
-    switch (asset.type) {
-      case AssetType.audio:
-        builder = AudioPageBuilder(asset: asset);
-        break;
-      case AssetType.image:
-        builder = ImagePageBuilder(
+    final Widget builder = switch (asset.type) {
+      AssetType.audio => AudioPageBuilder(asset: asset),
+      AssetType.image => ImagePageBuilder(
           asset: asset,
           delegate: this,
           previewThumbnailSize: previewThumbnailSize,
-        );
-        break;
-      case AssetType.video:
-        builder = VideoPageBuilder(
+        ),
+      AssetType.video => VideoPageBuilder(
           asset: asset,
           delegate: this,
           hasOnlyOneVideoAndMoment: isWeChatMoment && hasVideo,
-        );
-        break;
-      case AssetType.other:
-        builder = Center(
+        ),
+      AssetType.other => Center(
           child: ScaleText(
             textDelegate.unSupportedAssetType,
             semanticsLabel: semanticsTextDelegate.unSupportedAssetType,
           ),
-        );
-        break;
-    }
+        ),
+    };
     return MergeSemantics(
       child: Consumer<AssetPickerViewerProvider<AssetEntity>?>(
         builder: (
@@ -459,7 +469,7 @@ class DefaultAssetPickerViewerBuilderDelegate
   /// 音频的底部预览部件
   Widget _audioPreviewItem(AssetEntity asset) {
     return ColoredBox(
-      color: viewerState.context.themeData.dividerColor,
+      color: viewerState.context.theme.dividerColor,
       child: const Center(child: Icon(Icons.audiotrack)),
     );
   }
@@ -572,13 +582,10 @@ class DefaultAssetPickerViewerBuilderDelegate
                 color: backgroundColor,
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                mainAxisAlignment: MainAxisAlignment.end,
                 children: <Widget>[
-                  const Spacer(),
-                  if (isAppleOS && (provider != null || isWeChatMoment))
-                    confirmButton(context)
-                  else
-                    selectButton(context),
+                  if (provider != null || isWeChatMoment)
+                    confirmButton(context),
                 ],
               ),
             ),
@@ -605,7 +612,7 @@ class DefaultAssetPickerViewerBuilderDelegate
       pageController.jumpToPage(page);
       final double offset =
           (index - 0.5) * (bottomPreviewHeight - padding * 3) -
-              context.mediaQuery.size.width / 4;
+              MediaQuery.sizeOf(context).width / 4;
       previewingListController.animateTo(
         math.max(0, offset),
         curve: Curves.ease,
@@ -626,18 +633,12 @@ class DefaultAssetPickerViewerBuilderDelegate
           builder: (_, AsyncSnapshot<int> snapshot) {
             final AssetEntity asset = selectedAssets!.elementAt(index);
             final bool isViewing = previewAssets[snapshot.data!] == asset;
-            final Widget item = () {
-              switch (asset.type) {
-                case AssetType.image:
-                  return _imagePreviewItem(asset);
-                case AssetType.video:
-                  return _videoPreviewItem(asset);
-                case AssetType.audio:
-                  return _audioPreviewItem(asset);
-                case AssetType.other:
-                  return const SizedBox.shrink();
-              }
-            }();
+            final Widget item = switch (asset.type) {
+              AssetType.image => _imagePreviewItem(asset),
+              AssetType.video => _videoPreviewItem(asset),
+              AssetType.audio => _audioPreviewItem(asset),
+              AssetType.other => const SizedBox.shrink(),
+            };
             return Semantics(
               label: '${semanticsTextDelegate.semanticTypeLabel(asset.type)}'
                   '${index + 1}',
@@ -724,7 +725,7 @@ class DefaultAssetPickerViewerBuilderDelegate
                 ),
               ),
             ),
-            if (!isAppleOS && specialPickerType == null)
+            if (!isAppleOS(context) && specialPickerType == null)
               Expanded(
                 child: Center(
                   child: Semantics(
@@ -743,32 +744,18 @@ class DefaultAssetPickerViewerBuilderDelegate
                   ),
                 ),
               ),
-            if (isAppleOS && provider != null)
+            if (provider != null)
               Expanded(
-                child: Align(
+                child: Container(
                   alignment: AlignmentDirectional.centerEnd,
+                  padding: const EdgeInsetsDirectional.only(end: 14),
                   child: Semantics(
                     sortKey: ordinalSortKey(0.2),
                     child: selectButton(context),
                   ),
                 ),
               )
-            else if (isAppleOS)
-              const Spacer(),
-            if (!isAppleOS && (provider != null || isWeChatMoment))
-              Expanded(
-                child: Align(
-                  alignment: AlignmentDirectional.centerEnd,
-                  child: Semantics(
-                    sortKey: ordinalSortKey(0.3),
-                    child: Padding(
-                      padding: const EdgeInsetsDirectional.only(end: 14),
-                      child: confirmButton(context),
-                    ),
-                  ),
-                ),
-              )
-            else if (!isAppleOS)
+            else
               const Spacer(),
           ],
         ),
@@ -849,10 +836,12 @@ class DefaultAssetPickerViewerBuilderDelegate
             child: ScaleText(
               buildText(),
               style: TextStyle(
-                color: themeData.textTheme.bodyText1?.color,
+                color: themeData.textTheme.bodyLarge?.color,
                 fontSize: 17,
                 fontWeight: FontWeight.normal,
               ),
+              overflow: TextOverflow.fade,
+              softWrap: false,
               semanticsLabel: () {
                 if (isWeChatMoment && hasVideo) {
                   return semanticsTextDelegate.confirm;
@@ -947,14 +936,14 @@ class DefaultAssetPickerViewerBuilderDelegate
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: <Widget>[
-                    if (isAppleOS)
+                    if (isAppleOS(context))
                       _appleOSSelectButton(c, isSelected, asset)
                     else
                       _androidSelectButton(c, isSelected, asset),
-                    if (!isAppleOS)
+                    if (!isAppleOS(context))
                       ScaleText(
                         textDelegate.select,
-                        style: const TextStyle(fontSize: 17, height: 1),
+                        style: const TextStyle(fontSize: 17, height: 1.2),
                         semanticsLabel: semanticsTextDelegate.select,
                       ),
                   ],
@@ -1010,7 +999,7 @@ class DefaultAssetPickerViewerBuilderDelegate
               ] else ...<Widget>[
                 appBar(context),
                 if (selectedAssets != null ||
-                    (isWeChatMoment && hasVideo && isAppleOS))
+                    (isWeChatMoment && hasVideo && isAppleOS(context)))
                   bottomDetailBuilder(context),
               ],
             ],

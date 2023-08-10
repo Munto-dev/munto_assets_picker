@@ -19,7 +19,9 @@
         "ideas",
         "maintenance",
         "question",
-        "review"
+        "review",
+        "a11y",
+        "translation"
       ]
     },
     {
@@ -180,9 +182,63 @@
       "login": "taqiabdulaziz",
       "name": "Muhammad Taqi Abdul Aziz",
       "avatar_url": "https://avatars.githubusercontent.com/u/30410316?v=4",
-      "profile": "http://taqi.me",
+      "profile": "https://github.com/taqiabdulaziz",
       "contributions": [
         "doc"
+      ]
+    },
+    {
+      "login": "hellohejinyu",
+      "name": "何锦余",
+      "avatar_url": "https://avatars.githubusercontent.com/u/8766034?v=4",
+      "profile": "https://github.com/hellohejinyu",
+      "contributions": [
+        "bug"
+      ]
+    },
+    {
+      "login": "leonpesdk",
+      "name": "Leon Dudlik",
+      "avatar_url": "https://avatars.githubusercontent.com/u/57394644?v=4",
+      "profile": "https://github.com/leonpesdk",
+      "contributions": [
+        "bug"
+      ]
+    },
+    {
+      "login": "LeGoffMael",
+      "name": "Maël",
+      "avatar_url": "https://avatars.githubusercontent.com/u/22376981?v=4",
+      "profile": "https://www.legoffmael.fr",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "dddrop",
+      "name": "dddrop",
+      "avatar_url": "https://avatars.githubusercontent.com/u/5361175?v=4",
+      "profile": "https://github.com/dddrop",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "nploi",
+      "name": "Nguyen Phuc Loi",
+      "avatar_url": "https://avatars.githubusercontent.com/u/34020090?v=4",
+      "profile": "https://www.linkedin.com/in/loinp",
+      "contributions": [
+        "translation"
+      ]
+    },
+    {
+      "login": "cevheri",
+      "name": "Cevheri",
+      "avatar_url": "https://avatars.githubusercontent.com/u/12383547?v=4",
+      "profile": "https://sqlturk.wordpress.com/",
+      "contributions": [
+        "translation"
       ]
     }
   ],
@@ -191,5 +247,7 @@
   "projectOwner": "fluttercandies",
   "repoType": "github",
   "repoHost": "https://github.com",
-  "skipCi": true
+  "skipCi": true,
+  "commitConvention": "angular",
+  "commitType": "docs"
 }
