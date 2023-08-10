@@ -511,7 +511,7 @@ abstract class AssetPickerBuilderDelegate<Asset, Path> {
             ),
             const SizedBox(width: 15),
             Expanded(
-              child: ScaleText(
+              child: Text(
                 textDelegate.accessAllTip,
                 style: MuntorialTextStyles.size12Regular.white.singleLine,
                 semanticsLabel: semanticsTextDelegate.accessAllTip,
@@ -595,7 +595,7 @@ abstract class AssetPickerBuilderDelegate<Asset, Path> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
-          ScaleText(
+          Text(
             textDelegate.unableToAccessAll,
             style: MuntorialTextStyles.size18SemiBold.singleLine.white,
             textAlign: TextAlign.center,
@@ -653,7 +653,7 @@ abstract class AssetPickerBuilderDelegate<Asset, Path> {
 
     final Widget accessLimitedButton = GestureDetector(
       onTap: () => permissionOverlayDisplay.value = false,
-      child: ScaleText(
+      child: Text(
         textDelegate.accessLimitedAssets,
         style: MuntorialTextStyles.size14Regular.singleLine.white,
         textAlign: TextAlign.center,
@@ -1521,9 +1521,18 @@ class DefaultAssetPickerBuilderDelegate
   Widget confirmButton(BuildContext context) {
     return Consumer<DefaultAssetPickerProvider>(
       builder: (_, DefaultAssetPickerProvider p, __) {
-        final bool isSelectedNotEmpty = p.isSelectedNotEmpty;
-        final bool shouldAllowConfirm =
-            isSelectedNotEmpty || p.previousSelectedAssets.isNotEmpty;
+        return ConfirmButton(
+          onPressed: p.isSelectedNotEmpty
+              ? () => Navigator.of(context).maybePop(p.selectedAssets)
+              : null,
+          text: p.isSelectedNotEmpty && !isSingleAssetMode
+              ? '${textDelegate.confirm}'
+                  ' (${p.selectedAssets.length}/${p.maxAssets})'
+              : textDelegate.confirm,
+          isActive: p.isSelectedNotEmpty,
+        );
+
+        //기존 코드 남겨둠
         return MaterialButton(
           minWidth: shouldAllowConfirm ? 48 : 20,
           height: appBarItemHeight,
@@ -1738,7 +1747,7 @@ class DefaultAssetPickerBuilderDelegate
       String semanticsText,
     ) {
       return Flexible(
-        child: ScaleText(
+        child: Text(
           text,
           style: MuntorialTextStyles.size14Regular.white.singleLine,
           maxLines: 1,
@@ -1993,7 +2002,7 @@ class DefaultAssetPickerBuilderDelegate
                 p.selectedDescriptions,
             builder: (BuildContext c, __, ___) => Padding(
               padding: const EdgeInsets.symmetric(vertical: 12),
-              child: ScaleText(
+              child: Text(
                 '${textDelegate.preview}'
                 '${p.isSelectedNotEmpty ? ' (${p.selectedAssets.length})' : ''}',
                 style: MuntorialTextStyles.size16Regular.singleLine.copyWith(
