@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:muntorial/muntorial.dart';
 
 import '../munto_assets_picker.dart';
-import 'delegates/asset_picker_text_delegate_korean.dart';
 
 class MuntoImagePickerHelper {
   MuntoImagePickerHelper._();
