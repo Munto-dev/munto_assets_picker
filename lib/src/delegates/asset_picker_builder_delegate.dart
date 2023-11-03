@@ -1745,7 +1745,7 @@ class DefaultAssetPickerBuilderDelegate
 
   @override
   Widget pathEntitySelector(BuildContext context) {
-    Widget _text(
+    Widget pathText(
       BuildContext context,
       String text,
       String semanticsText,
@@ -1792,13 +1792,13 @@ class DefaultAssetPickerBuilderDelegate
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
                   if (path == null && isPermissionLimited)
-                    _text(
+                    pathText(
                       context,
                       textDelegate.changeAccessibleLimitedAssets,
                       semanticsTextDelegate.changeAccessibleLimitedAssets,
                     ),
                   if (path != null)
-                    _text(
+                    pathText(
                       context,
                       isPermissionLimited && path.isAll
                           ? textDelegate.accessiblePathName
@@ -1958,7 +1958,7 @@ class DefaultAssetPickerBuilderDelegate
 
   @override
   Widget previewButton(BuildContext context) {
-    Future<void> _onTap() async {
+    Future<void> onTap() async {
       final DefaultAssetPickerProvider p =
           context.read<DefaultAssetPickerProvider>();
       final List<AssetEntity> selectedAssets = p.selectedAssets;
@@ -2000,7 +2000,7 @@ class DefaultAssetPickerBuilderDelegate
       },
       child: Consumer<DefaultAssetPickerProvider>(
         builder: (_, DefaultAssetPickerProvider p, __) => GestureDetector(
-          onTap: p.isSelectedNotEmpty ? _onTap : null,
+          onTap: p.isSelectedNotEmpty ? onTap : null,
           child: Selector<DefaultAssetPickerProvider, String>(
             selector: (_, DefaultAssetPickerProvider p) =>
                 p.selectedDescriptions,
