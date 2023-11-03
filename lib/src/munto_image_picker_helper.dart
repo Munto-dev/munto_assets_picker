@@ -11,16 +11,20 @@ class MuntoImagePickerHelper {
     BuildContext context, {
     Key? key,
     required int maxAssets,
-  }) {
-    return AssetPicker.pickAssets(
-      context,
-      pickerConfig: AssetPickerConfig(
-        pickerTheme: _muntoThemeData,
-        maxAssets: maxAssets,
-        requestType: RequestType.image,
-        textDelegate: const KoreanAssetPickerTextDelegate(),
-      ),
-    );
+  }) async {
+    try {
+      return await AssetPicker.pickAssets(
+        context,
+        pickerConfig: AssetPickerConfig(
+          pickerTheme: _muntoThemeData,
+          maxAssets: maxAssets,
+          requestType: RequestType.image,
+          textDelegate: const KoreanAssetPickerTextDelegate(),
+        ),
+      );
+    } catch (e) {
+      rethrow;
+    }
   }
 
   static final ThemeData _muntoThemeData = ThemeData(
