@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:muntorial/muntorial.dart';
 
 import '../munto_assets_picker.dart';
-import 'delegates/asset_picker_text_delegate_korean.dart';
+import 'delegates/asset_picker_text_delegate_korean.dart' as korean;
 
 class MuntoImagePickerHelper {
   MuntoImagePickerHelper._();
@@ -19,7 +19,7 @@ class MuntoImagePickerHelper {
         pickerTheme: _muntoThemeData,
         maxAssets: maxAssets,
         requestType: RequestType.image,
-        textDelegate: const KoreanAssetPickerTextDelegate(),
+        textDelegate: const korean.KoreanAssetPickerTextDelegate(),
       ),
     );
   }
@@ -52,9 +52,9 @@ class MuntoImagePickerHelper {
     buttonTheme: const ButtonThemeData(buttonColor: MuntorialColors.red),
     colorScheme: ColorScheme(
       primary: Colors.grey[900]!,
-      primaryVariant: Colors.grey[900],
+      primaryContainer: Colors.grey[900],
       secondary: MuntorialColors.red,
-      secondaryVariant: MuntorialColors.red,
+      secondaryContainer: MuntorialColors.red,
       background: Colors.grey[900]!,
       surface: Colors.grey[900]!,
       brightness: Brightness.dark,
