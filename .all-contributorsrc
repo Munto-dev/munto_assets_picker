@@ -211,7 +211,8 @@
       "avatar_url": "https://avatars.githubusercontent.com/u/22376981?v=4",
       "profile": "https://www.legoffmael.fr",
       "contributions": [
-        "code"
+        "code",
+        "maintenance"
       ]
     },
     {
@@ -239,6 +240,24 @@
       "profile": "https://sqlturk.wordpress.com/",
       "contributions": [
         "translation"
+      ]
+    },
+    {
+      "login": "LIMMIHEE",
+      "name": "mirimhee",
+      "avatar_url": "https://avatars.githubusercontent.com/u/48482259?v=4",
+      "profile": "https://velog.io/@hee_mm_",
+      "contributions": [
+        "translation"
+      ]
+    },
+    {
+      "login": "AmosHuKe",
+      "name": "Amos",
+      "avatar_url": "https://avatars.githubusercontent.com/u/32262985?v=4",
+      "profile": "https://amoshk.top",
+      "contributions": [
+        "bug"
       ]
     }
   ],

@@ -14,16 +14,12 @@ that can be found in the LICENSE file. -->
 [![GitHub forks](https://img.shields.io/github/forks/fluttercandies/flutter_wechat_assets_picker?logo=github&style=flat-square)](https://github.com/fluttercandies/flutter_wechat_assets_picker/network)
 
 [![Awesome Flutter](https://cdn.rawgit.com/sindresorhus/awesome/d7305f38d29fed78fa85652e3a63e154dd8e8829/media/badge.svg)](https://github.com/Solido/awesome-flutter)
-<a target="_blank" href="https://jq.qq.com/?_wv=1027&k=5bcc0gy"><img border="0" src="https://pub.idqqimg.com/wpa/images/group.png" alt="FlutterCandies" title="FlutterCandies"></a>
+[![Flutter Candies QQ群](https://pub.idqqimg.com/wpa/images/group.png)](https://jq.qq.com/?_wv=1027&k=5bcc0gy)
 
 Language: English | [中文](README-ZH.md)
 
-An image picker (also with videos and audios)
+An **image picker (also with videos and audios)**
 for Flutter projects based on the WeChat's UI.
-The package is using
-[photo_manager][photo_manager pub] for asset implementation,
-[extended_image][extended_image pub] for image preview,
-and [provider][provider pub] to help manage the state of the picker.
 
 Current WeChat version that UI based on: **8.3.x**
 UI designs will be updated following the WeChat update in anytime.
@@ -31,15 +27,31 @@ UI designs will be updated following the WeChat update in anytime.
 To take a photo or a video for assets,
 please check the detailed usage in the example,
 and head over to [wechat_camera_picker][wechat_camera_picker pub].
-The package is a standalone extension that need to be used with combination.
+The package is a standalone extension that can to be used with combination.
 
 See the [Migration Guide][] to learn how to migrate between breaking changes.
+
+## Package credits
+
+The package is built from these wonderful packages.
+
+| Name                                 | Features                                             |
+|:-------------------------------------|:-----------------------------------------------------|
+| [photo_manager][photo_manager pub]   | The basic abstractions and management for assets.    |
+| [extended_image][extended_image pub] | Preview assets with expected behaviors.              |
+| [provider][provider pub]             | Helps to manage the interaction state of the picker. |
+| [video_player][video_player pub]     | Plays videos and audios correspondingly.             |
+ 
+Their implementation should be relatively stable in the package.
+If you've found any issues related to them when using the picker,
+submit issues to our issue tracker first.
 
 <details>
   <summary>Table of content</summary>
 
 <!-- TOC -->
 * [Flutter WeChat Assets Picker](#flutter-wechat-assets-picker)
+  * [Package credits](#package-credits)
   * [Features ✨](#features-)
     * [Notes 📝](#notes-)
   * [Projects using this plugin 🖼️](#projects-using-this-plugin-)
@@ -140,12 +152,13 @@ before you have any questions.
 The package only guarantees to be working on **the stable version of Flutter**.
 We won't update it in real-time to align with other channels of Flutter.
 
-|        | 3.0.0 | 3.3.0 | 3.7.0 | 3.10.0 |
-|--------|:-----:|:-----:|:-----:|:------:|
-| 8.5.0+ |   ❌   |   ❌   |   ❌   |   ✅    |
-| 8.4.0+ |   ❌   |   ❌   |   ✅   |   ❌    |
-| 8.0.0+ |   ✅   |   ✅   |   ❌   |   ❌    |
-| 7.3.0+ |   ✅   |   ✅   |   ❌   |   ❌    |
+|        | 3.0 | 3.3 | 3.7 | 3.10 | **3.13** |
+|--------|:---:|:---:|:---:|:----:|:--------:|
+| 8.7.0+ |  ❌  |  ❌  |  ❌  |  ❌   |    ✅     |
+| 8.5.0+ |  ❌  |  ❌  |  ❌  |  ✅   |    ❌     |
+| 8.4.0+ |  ❌  |  ❌  |  ✅  |  ❌   |    ❌     |
+| 8.0.0+ |  ✅  |  ✅  |  ❌  |  ❌   |    ❌     |
+| 7.3.0+ |  ✅  |  ✅  |  ❌  |  ❌   |    ❌     |
 
 If you got a `resolve conflict` error when running `flutter pub get`,
 please use `dependency_overrides` to fix it.
@@ -210,13 +223,9 @@ consider declare only relevant permission in your apps, more specifically:
    ```Podfile
    platform :ios, '11.0'
    ```
+   Remove the `#` heading if the line starts with it.
 2. Add the following content to `Info.plist`.
 ```
-<key>NSAppTransportSecurity</key>
-<dict>
-	<key>NSAllowsArbitraryLoads</key>
-	<true/>
-</dict>
 <key>NSPhotoLibraryUsageDescription</key>
 <string>Replace with your permission description.</string>
 ```
@@ -228,6 +237,7 @@ consider declare only relevant permission in your apps, more specifically:
    ```ruby
    platform :osx, '10.15'
    ```
+   Remove the `#` heading if the line starts with it.
 2. Set the minimum deployment target of the macOS to *10.15*.
    Use XCode to open `macos/Runner.xcworkspace` .
 3. Follow the [iOS](#iOS) instructions and modify `Info.plist` accordingly.
@@ -545,12 +555,14 @@ Many thanks to these wonderful people ([emoji key](https://allcontributors.org/d
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/taqiabdulaziz"><img src="https://avatars.githubusercontent.com/u/30410316?v=4?s=50" width="50px;" alt="Muhammad Taqi Abdul Aziz"/><br /><sub><b>Muhammad Taqi Abdul Aziz</b></sub></a><br /><a href="https://github.com/fluttercandies/flutter_wechat_assets_picker/commits?author=taqiabdulaziz" title="Documentation">📖</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/hellohejinyu"><img src="https://avatars.githubusercontent.com/u/8766034?v=4?s=50" width="50px;" alt="何锦余"/><br /><sub><b>何锦余</b></sub></a><br /><a href="https://github.com/fluttercandies/flutter_wechat_assets_picker/issues?q=author%3Ahellohejinyu" title="Bug reports">🐛</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/leonpesdk"><img src="https://avatars.githubusercontent.com/u/57394644?v=4?s=50" width="50px;" alt="Leon Dudlik"/><br /><sub><b>Leon Dudlik</b></sub></a><br /><a href="https://github.com/fluttercandies/flutter_wechat_assets_picker/issues?q=author%3Aleonpesdk" title="Bug reports">🐛</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://www.legoffmael.fr"><img src="https://avatars.githubusercontent.com/u/22376981?v=4?s=50" width="50px;" alt="Maël"/><br /><sub><b>Maël</b></sub></a><br /><a href="https://github.com/fluttercandies/flutter_wechat_assets_picker/commits?author=LeGoffMael" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://www.legoffmael.fr"><img src="https://avatars.githubusercontent.com/u/22376981?v=4?s=50" width="50px;" alt="Maël"/><br /><sub><b>Maël</b></sub></a><br /><a href="https://github.com/fluttercandies/flutter_wechat_assets_picker/commits?author=LeGoffMael" title="Code">💻</a> <a href="#maintenance-LeGoffMael" title="Maintenance">🚧</a></td>
     </tr>
     <tr>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/dddrop"><img src="https://avatars.githubusercontent.com/u/5361175?v=4?s=50" width="50px;" alt="dddrop"/><br /><sub><b>dddrop</b></sub></a><br /><a href="https://github.com/fluttercandies/flutter_wechat_assets_picker/commits?author=dddrop" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://www.linkedin.com/in/loinp"><img src="https://avatars.githubusercontent.com/u/34020090?v=4?s=50" width="50px;" alt="Nguyen Phuc Loi"/><br /><sub><b>Nguyen Phuc Loi</b></sub></a><br /><a href="#translation-nploi" title="Translation">🌍</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://sqlturk.wordpress.com/"><img src="https://avatars.githubusercontent.com/u/12383547?v=4?s=50" width="50px;" alt="Cevheri"/><br /><sub><b>Cevheri</b></sub></a><br /><a href="#translation-cevheri" title="Translation">🌍</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://velog.io/@hee_mm_"><img src="https://avatars.githubusercontent.com/u/48482259?v=4?s=50" width="50px;" alt="mirimhee"/><br /><sub><b>mirimhee</b></sub></a><br /><a href="#translation-LIMMIHEE" title="Translation">🌍</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://amoshk.top"><img src="https://avatars.githubusercontent.com/u/32262985?v=4?s=50" width="50px;" alt="Amos"/><br /><sub><b>Amos</b></sub></a><br /><a href="https://github.com/fluttercandies/flutter_wechat_assets_picker/issues?q=author%3AAmosHuKe" title="Bug reports">🐛</a></td>
     </tr>
   </tbody>
 </table>
@@ -578,6 +590,7 @@ such as [IntelliJ IDEA](https://www.jetbrains.com/idea/?from=fluttercandies).
 [photo_manager pub]: https://pub.dev/packages/photo_manager
 [extended_image pub]: https://pub.dev/packages/extended_image
 [provider pub]: https://pub.dev/packages/provider
+[video_player pub]: https://pub.dev/packages/video_player
 [wechat_camera_picker pub]: https://pub.dev/packages/wechat_camera_picker
 [Migration Guide]: https://github.com/fluttercandies/flutter_wechat_assets_picker/blob/main/guides/migration_guide.md
 [photo_manager's API docs]: https://pub.dev/documentation/photo_manager/latest/
