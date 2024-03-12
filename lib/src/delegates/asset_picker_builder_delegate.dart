@@ -14,6 +14,7 @@ import 'package:flutter/services.dart';
 import 'package:munto_assets_picker/src/widget/confirm_button.dart';
 import 'package:muntorial/muntorial.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
 import 'package:provider/provider.dart';
 
 import '../constants/constants.dart';

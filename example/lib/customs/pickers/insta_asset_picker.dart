@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:munto_assets_picker/munto_assets_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:wechat_camera_picker/wechat_camera_picker.dart';
 
 import '../../constants/extensions.dart';
 

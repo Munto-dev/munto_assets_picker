@@ -3,8 +3,7 @@
 // in the LICENSE file.
 
 import 'package:flutter/material.dart';
-import 'package:munto_assets_picker/munto_assets_picker.dart'
-    show AssetEntity, AssetEntityImageProvider, AssetType;
+import 'package:wechat_camera_picker/wechat_camera_picker.dart';
 
 class AssetWidgetBuilder extends StatelessWidget {
   const AssetWidgetBuilder({
