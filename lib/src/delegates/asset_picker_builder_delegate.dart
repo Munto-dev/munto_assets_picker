@@ -16,23 +16,19 @@ import 'package:muntorial/muntorial.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:wechat_picker_library/wechat_picker_library.dart';
 
 import '../constants/constants.dart';
 import '../constants/enums.dart';
-import '../constants/extensions.dart';
 import '../constants/typedefs.dart';
 import '../delegates/asset_picker_text_delegate.dart';
-import '../internal/singleton.dart';
+import '../internals/singleton.dart';
 import '../models/path_wrapper.dart';
 import '../provider/asset_picker_provider.dart';
 import '../widget/asset_picker.dart';
 import '../widget/asset_picker_app_bar.dart';
 import '../widget/asset_picker_viewer.dart';
 import '../widget/builder/asset_entity_grid_item_builder.dart';
-import '../widget/builder/value_listenable_builder_2.dart';
-import '../widget/gaps.dart';
-import '../widget/platform_progress_indicator.dart';
-import '../widget/scale_text.dart';
 
 /// The delegate to build the whole picker's components.
 ///
@@ -248,11 +244,7 @@ abstract class AssetPickerBuilderDelegate<Asset, Path> {
 
   /// Determine how to browse assets in the viewer.
   /// 定义如何在查看器中浏览资源
-  Future<void> viewAsset(
-    BuildContext context,
-    int index,
-    AssetEntity currentAsset,
-  );
+  Future<void> viewAsset(BuildContext context, int? index, Asset currentAsset);
 
   /// Yes, the build method.
   /// 没错，是它是它就是它，我们亲爱的 build 方法~
@@ -570,8 +562,11 @@ abstract class AssetPickerBuilderDelegate<Asset, Path> {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: IconButton(
         onPressed: Navigator.of(context).maybePop,
-        tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-        icon: const Icon(Icons.close),
+        tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+        icon: Icon(
+          Icons.close,
+          semanticLabel: MaterialLocalizations.of(context).closeButtonTooltip,
+        ),
       ),
     );
   }
@@ -894,24 +889,23 @@ class DefaultAssetPickerBuilderDelegate
   @override
   Future<void> viewAsset(
     BuildContext context,
-    int index,
+    int? index,
     AssetEntity currentAsset,
   ) async {
-    final DefaultAssetPickerProvider provider =
-        context.read<DefaultAssetPickerProvider>();
+    final p = context.read<DefaultAssetPickerProvider>();
     // - When we reached the maximum select count and the asset is not selected,
     //   do nothing.
     // - When the special type is WeChat Moment, pictures and videos cannot
     //   be selected at the same time. Video select should be banned if any
     //   pictures are selected.
-    if ((!provider.selectedAssets.contains(currentAsset) &&
-            provider.selectedMaximumAssets) ||
+    if ((!p.selectedAssets.contains(currentAsset) && p.selectedMaximumAssets) ||
         (isWeChatMoment &&
             currentAsset.type == AssetType.video &&
-            provider.selectedAssets.isNotEmpty)) {
+            p.selectedAssets.isNotEmpty)) {
       return;
     }
-    final List<AssetEntity> current;
+    final revert = effectiveShouldRevertGrid(context);
+    List<AssetEntity> current;
     final List<AssetEntity>? selected;
     final int effectiveIndex;
     if (isWeChatMoment) {
@@ -920,16 +914,29 @@ class DefaultAssetPickerBuilderDelegate
         selected = null;
         effectiveIndex = 0;
       } else {
-        current = provider.currentAssets
+        if (index == null) {
+          current = p.selectedAssets;
+          current = current.reversed.toList(growable: false);
+        } else {
+          current = p.currentAssets;
+        }
+        current = current
             .where((AssetEntity e) => e.type == AssetType.image)
             .toList();
-        selected = provider.selectedAssets;
-        effectiveIndex = current.indexOf(currentAsset);
+        selected = p.selectedAssets;
+        final i = current.indexOf(currentAsset);
+        effectiveIndex = revert ? current.length - i - 1 : i;
       }
     } else {
-      current = provider.currentAssets;
-      selected = provider.selectedAssets;
-      effectiveIndex = index;
+      selected = p.selectedAssets;
+      if (index == null) {
+        current = p.selectedAssets;
+        current = current.reversed.toList(growable: false);
+        effectiveIndex = selected.indexOf(currentAsset);
+      } else {
+        current = p.currentAssets;
+        effectiveIndex = revert ? current.length - index - 1 : index;
+      }
     }
     final List<AssetEntity>? result = await AssetPickerViewer.pushToViewer(
       context,
@@ -939,10 +946,10 @@ class DefaultAssetPickerBuilderDelegate
       previewThumbnailSize: previewThumbnailSize,
       selectPredicate: selectPredicate,
       selectedAssets: selected,
-      selectorProvider: provider,
+      selectorProvider: p,
       specialPickerType: specialPickerType,
-      maxAssets: provider.maxAssets,
-      shouldReversePreview: isAppleOS(context),
+      maxAssets: p.maxAssets,
+      shouldReversePreview: revert,
     );
     if (result != null) {
       Navigator.of(context).maybePop(result);
@@ -952,7 +959,6 @@ class DefaultAssetPickerBuilderDelegate
   @override
   AssetPickerAppBar appBar(BuildContext context) {
     final AssetPickerAppBar appBar = AssetPickerAppBar(
-      backgroundColor: theme.appBarTheme.backgroundColor,
       title: Semantics(
         onTapHint: semanticsTextDelegate.sActionSwitchPathLabel,
         child: pathEntitySelector(context),
@@ -1457,7 +1463,7 @@ class DefaultAssetPickerBuilderDelegate
         gradient: LinearGradient(
           begin: AlignmentDirectional.bottomCenter,
           end: AlignmentDirectional.topCenter,
-          colors: <Color>[theme.dividerColor, Colors.transparent],
+          colors: <Color>[theme.splashColor, Colors.transparent],
         ),
       ),
       child: Padding(
@@ -1488,7 +1494,7 @@ class DefaultAssetPickerBuilderDelegate
             gradient: LinearGradient(
               begin: AlignmentDirectional.topCenter,
               end: AlignmentDirectional.bottomCenter,
-              colors: <Color>[theme.dividerColor, Colors.transparent],
+              colors: <Color>[theme.splashColor, Colors.transparent],
             ),
           ),
           child: Padding(
@@ -1540,7 +1546,7 @@ class DefaultAssetPickerBuilderDelegate
           height: appBarItemHeight,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           color: theme.colorScheme.secondary,
-          disabledColor: theme.dividerColor,
+          disabledColor: theme.splashColor,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(3),
           ),
@@ -1779,7 +1785,7 @@ class DefaultAssetPickerBuilderDelegate
           padding: const EdgeInsetsDirectional.only(start: 12, end: 6),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(999),
-            color: theme.dividerColor,
+            color: theme.focusColor,
           ),
           child: Selector<DefaultAssetPickerProvider,
               PathWrapper<AssetPathEntity>?>(
@@ -1909,32 +1915,15 @@ class DefaultAssetPickerBuilderDelegate
                           end: 20,
                         ),
                         child: ExcludeSemantics(
-                          child: Row(
-                            children: <Widget>[
-                              Flexible(
-                                child: Padding(
-                                  padding: const EdgeInsetsDirectional.only(
-                                    end: 10,
-                                  ),
-                                  child: ScaleText(
-                                    name,
-                                    style: const TextStyle(fontSize: 17),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ),
+                          child: ScaleText.rich(
+                            [
+                              TextSpan(text: name),
                               if (semanticsCount != null)
-                                ScaleText(
-                                  '($semanticsCount)',
-                                  style: TextStyle(
-                                    color: theme.textTheme.bodySmall?.color,
-                                    fontSize: 17,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                                TextSpan(text: ' ($semanticsCount)'),
                             ],
+                            style: const TextStyle(fontSize: 17),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ),
@@ -1972,7 +1961,7 @@ class DefaultAssetPickerBuilderDelegate
       child: Consumer<DefaultAssetPickerProvider>(
         builder: (context, DefaultAssetPickerProvider p, __) => GestureDetector(
           onTap: p.isSelectedNotEmpty
-              ? () => viewAsset(context, 0, p.selectedAssets.first)
+              ? () => viewAsset(context, null, p.selectedAssets.first)
               : null,
           child: Selector<DefaultAssetPickerProvider, String>(
             selector: (_, DefaultAssetPickerProvider p) =>
@@ -2139,7 +2128,7 @@ class DefaultAssetPickerBuilderDelegate
           gradient: LinearGradient(
             begin: AlignmentDirectional.bottomCenter,
             end: AlignmentDirectional.topCenter,
-            colors: <Color>[theme.dividerColor, Colors.transparent],
+            colors: <Color>[theme.splashColor, Colors.transparent],
           ),
         ),
         child: Row(
@@ -2179,7 +2168,9 @@ class DefaultAssetPickerBuilderDelegate
       padding: const EdgeInsets.symmetric(horizontal: 20).copyWith(
         bottom: context.bottomPadding,
       ),
-      color: theme.primaryColor.withOpacity(isAppleOS(context) ? .9 : 1),
+      color: theme.bottomAppBarTheme.color?.withOpacity(
+        theme.bottomAppBarTheme.color!.opacity * (isAppleOS(context) ? .9 : 1),
+      ),
       child: Row(
         children: <Widget>[
           if (isPreviewEnabled) previewButton(context),
@@ -2194,15 +2185,17 @@ class DefaultAssetPickerBuilderDelegate
         children: <Widget>[accessLimitedBottomTip(context), child],
       );
     }
-    child = ClipRect(
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(
-          sigmaX: appleOSBlurRadius,
-          sigmaY: appleOSBlurRadius,
+    if (isAppleOS(context)) {
+      child = ClipRect(
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(
+            sigmaX: appleOSBlurRadius,
+            sigmaY: appleOSBlurRadius,
+          ),
+          child: child,
         ),
-        child: child,
-      ),
-    );
+      );
+    }
     return child;
   }
 
