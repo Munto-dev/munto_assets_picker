@@ -7,12 +7,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:video_player/video_player.dart';
+import 'package:wechat_picker_library/wechat_picker_library.dart';
 
 import '../../constants/constants.dart';
 import '../../delegates/asset_picker_viewer_builder_delegate.dart';
-import '../../internal/singleton.dart';
-import '../scale_text.dart';
-import 'locally_available_builder.dart';
+import '../../internals/singleton.dart';
 
 class VideoPageBuilder extends StatefulWidget {
   const VideoPageBuilder({
@@ -184,14 +183,18 @@ class _VideoPageBuilderState extends State<VideoPageBuilder> {
             builder: (_, bool value, __) => GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: value || MediaQuery.accessibleNavigationOf(context)
-                  ? () => playButtonCallback(context)
+                  ? () {
+                      playButtonCallback(context);
+                    }
                   : widget.delegate.switchDisplayingDetail,
               child: Center(
                 child: AnimatedOpacity(
                   duration: kThemeAnimationDuration,
                   opacity: value ? 0.0 : 1.0,
                   child: GestureDetector(
-                    onTap: () => playButtonCallback(context),
+                    onTap: () {
+                      playButtonCallback(context);
+                    },
                     child: DecoratedBox(
                       decoration: const BoxDecoration(
                         boxShadow: <BoxShadow>[
@@ -238,7 +241,9 @@ class _VideoPageBuilderState extends State<VideoPageBuilder> {
           return const SizedBox.shrink();
         }
         return Semantics(
-          onLongPress: () => playButtonCallback(context),
+          onLongPress: () {
+            playButtonCallback(context);
+          },
           onLongPressHint:
               Singleton.textDelegate.semanticsTextDelegate.sActionPlayHint,
           child: _contentBuilder(context),

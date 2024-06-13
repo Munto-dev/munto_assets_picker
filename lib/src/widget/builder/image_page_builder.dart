@@ -8,10 +8,11 @@ import 'package:extended_image/extended_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
 import 'package:video_player/video_player.dart';
+import 'package:wechat_picker_library/wechat_picker_library.dart';
 
 import '../../delegates/asset_picker_viewer_builder_delegate.dart';
-import 'locally_available_builder.dart';
 
 class ImagePageBuilder extends StatefulWidget {
   const ImagePageBuilder({
@@ -74,7 +75,9 @@ class _ImagePageBuilderState extends State<ImagePageBuilder> {
       file,
       videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
     );
-    setState(() => _controller = c);
+    setState(() {
+      _controller = c;
+    });
     c
       ..initialize()
       ..setVolume(0)
@@ -180,8 +183,12 @@ class _ImagePageBuilderState extends State<ImagePageBuilder> {
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: widget.delegate.switchDisplayingDetail,
-          onLongPress: _isLivePhoto ? () => _play() : null,
-          onLongPressEnd: _isLivePhoto ? (_) => _stop() : null,
+          onLongPress: _isLivePhoto ? _play : null,
+          onLongPressEnd: _isLivePhoto
+              ? (_) {
+                  _stop();
+                }
+              : null,
           child: Builder(
             builder: (BuildContext context) {
               if (!_isLivePhoto) {

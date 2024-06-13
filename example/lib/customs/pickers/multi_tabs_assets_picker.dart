@@ -30,7 +30,14 @@ class _MultiTabAssetPickerState extends State<MultiTabAssetPicker> {
   bool isDisplayingDetail = true;
 
   Future<void> callPicker(BuildContext context) async {
-    final PermissionState ps = await AssetPicker.permissionCheck();
+    final PermissionState ps = await AssetPicker.permissionCheck(
+      requestOption: const PermissionRequestOption(
+        androidPermission: AndroidPermission(
+          type: RequestType.all,
+          mediaLocation: false,
+        ),
+      ),
+    );
 
     final DefaultAssetPickerProvider provider = DefaultAssetPickerProvider(
       selectedAssets: entities,
@@ -387,7 +394,7 @@ class MultiTabAssetPickerBuilder extends DefaultAssetPickerBuilderDelegate {
             borderRadius: BorderRadius.circular(3),
           ),
           onPressed: p.isSelectedNotEmpty
-              ? () => Navigator.of(context).maybePop(p.selectedAssets)
+              ? () => Navigator.maybeOf(context)?.maybePop(p.selectedAssets)
               : null,
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           child: Text(
