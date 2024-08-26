@@ -96,6 +96,7 @@ class AssetPickerDelegate {
     );
     final Widget picker = AssetPicker<AssetEntity, AssetPathEntity>(
       key: key,
+      permissionRequestOption: permissionRequestOption,
       builder: DefaultAssetPickerBuilderDelegate(
         provider: provider,
         initialPermission: ps,
@@ -112,9 +113,12 @@ class AssetPickerDelegate {
         limitedPermissionOverlayPredicate:
             pickerConfig.limitedPermissionOverlayPredicate,
         pathNameBuilder: pickerConfig.pathNameBuilder,
+        assetsChangeCallback: pickerConfig.assetsChangeCallback,
+        assetsChangeRefreshPredicate: pickerConfig.assetsChangeRefreshPredicate,
         textDelegate: pickerConfig.textDelegate,
         themeColor: pickerConfig.themeColor,
         locale: Localizations.maybeLocaleOf(context),
+        shouldAutoplayPreview: pickerConfig.shouldAutoplayPreview,
       ),
     );
     final List<AssetEntity>? result = await Navigator.maybeOf(
@@ -157,6 +161,7 @@ class AssetPickerDelegate {
     await permissionCheck(requestOption: permissionRequestOption);
     final Widget picker = AssetPicker<Asset, Path>(
       key: key,
+      permissionRequestOption: permissionRequestOption,
       builder: delegate,
     );
     final List<Asset>? result = await Navigator.maybeOf(

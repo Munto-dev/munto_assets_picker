@@ -2,6 +2,9 @@
 // Use of this source code is governed by an Apache license that can be found
 // in the LICENSE file.
 
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:photo_manager/photo_manager.dart';
@@ -15,8 +18,13 @@ import 'asset_picker_page_route.dart';
 AssetPickerDelegate _pickerDelegate = const AssetPickerDelegate();
 
 class AssetPicker<Asset, Path> extends StatefulWidget {
-  const AssetPicker({super.key, required this.builder});
+  const AssetPicker({
+    super.key,
+    required this.permissionRequestOption,
+    required this.builder,
+  });
 
+  final PermissionRequestOption permissionRequestOption;
   final AssetPickerBuilderDelegate<Asset, Path> builder;
 
   /// Provide another [AssetPickerDelegate] which override with
@@ -99,11 +107,13 @@ class AssetPicker<Asset, Path> extends StatefulWidget {
 
 class AssetPickerState<Asset, Path> extends State<AssetPicker<Asset, Path>>
     with TickerProviderStateMixin, WidgetsBindingObserver {
+  Completer<PermissionState>? permissionStateLock;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    AssetPicker.registerObserve(_onLimitedAssetsUpdated);
+    AssetPicker.registerObserve(_onAssetsUpdated);
     widget.builder.initState(this);
   }
 
@@ -111,8 +121,14 @@ class AssetPickerState<Asset, Path> extends State<AssetPicker<Asset, Path>>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
-      PhotoManager.requestPermissionExtend().then((PermissionState ps) {
-        widget.builder.permission.value = ps;
+      requestPermission().then((ps) {
+        if (!mounted) {
+          return;
+        }
+        widget.builder.permissionNotifier.value = ps;
+        if (ps == PermissionState.limited && Platform.isAndroid) {
+          _onAssetsUpdated(const MethodCall(''));
+        }
       });
     }
   }
@@ -120,18 +136,34 @@ class AssetPickerState<Asset, Path> extends State<AssetPicker<Asset, Path>>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    AssetPicker.unregisterObserve(_onLimitedAssetsUpdated);
+    AssetPicker.unregisterObserve(_onAssetsUpdated);
     widget.builder.dispose();
     super.dispose();
   }
 
-  Future<void> _onLimitedAssetsUpdated(MethodCall call) {
+  Future<void> _onAssetsUpdated(MethodCall call) {
     return widget.builder.onAssetsChanged(call, (VoidCallback fn) {
       fn();
       if (mounted) {
         setState(() {});
       }
     });
+  }
+
+  Future<PermissionState> requestPermission() {
+    if (permissionStateLock != null) {
+      return permissionStateLock!.future;
+    }
+    final lock = Completer<PermissionState>();
+    permissionStateLock = lock;
+    Future(
+      () => PhotoManager.requestPermissionExtend(
+        requestOption: widget.permissionRequestOption,
+      ),
+    ).then(lock.complete).catchError(lock.completeError).whenComplete(() {
+      permissionStateLock = null;
+    });
+    return lock.future;
   }
 
   @override

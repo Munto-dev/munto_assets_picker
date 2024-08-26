@@ -273,7 +273,10 @@ class DefaultAssetPickerProvider
   }) {
     Singleton.sortPathDelegate = sortPathDelegate ?? SortPathDelegate.common;
     // Call [getAssetList] with route duration when constructing.
-    Future<void>.delayed(initializeDelayDuration, getPaths);
+    Future<void>.delayed(initializeDelayDuration, () async {
+      await getPaths(onlyAll: true);
+      await getPaths(onlyAll: false);
+    });
   }
 
   @visibleForTesting
@@ -326,17 +329,23 @@ class DefaultAssetPickerProvider
   }
 
   @override
-  Future<void> getPaths() async {
+  Future<void> getPaths({
+    bool onlyAll = false,
+    bool keepPreviousCount = false,
+  }) async {
     final PMFilter options;
-    final PMFilter? fog = filterOptions;
-    if (fog is FilterOptionGroup?) {
-      // Initial base options.
-      // Enable need title for audios to get proper display.
-      final FilterOptionGroup newOptions = FilterOptionGroup(
+    final fog = filterOptions;
+    if (fog == null) {
+      options = AdvancedCustomFilter(
+        orderBy: [OrderByItem.desc(CustomColumns.base.createDate)],
+      );
+    } else if (fog is FilterOptionGroup) {
+      final newOptions = FilterOptionGroup(
         imageOption: const FilterOption(
           sizeConstraint: SizeConstraint(ignoreSize: true),
         ),
         audioOption: const FilterOption(
+          // Enable title for audios to get proper display.
           needTitle: true,
           sizeConstraint: SizeConstraint(ignoreSize: true),
         ),
@@ -344,36 +353,46 @@ class DefaultAssetPickerProvider
         createTimeCond: DateTimeCond.def().copyWith(ignore: true),
         updateTimeCond: DateTimeCond.def().copyWith(ignore: true),
       );
-      // Merge user's filter options into base options if it's not null.
-      if (fog != null) {
-        newOptions.merge(fog);
-      }
+      newOptions.merge(fog);
       options = newOptions;
     } else {
       options = fog;
     }
 
-    final List<AssetPathEntity> list = await PhotoManager.getAssetPathList(
+    final list = await PhotoManager.getAssetPathList(
       type: requestType,
       filterOption: options,
+      onlyAll: onlyAll,
     );
 
-    _paths = list
-        .map((AssetPathEntity p) => PathWrapper<AssetPathEntity>(path: p))
-        .toList();
+    _paths = list.map((p) {
+      final int? assetCount;
+      if (keepPreviousCount) {
+        assetCount =
+            _paths.where((e) => e.path.id == p.id).firstOrNull?.assetCount;
+      } else {
+        assetCount = null;
+      }
+      return PathWrapper<AssetPathEntity>(path: p, assetCount: assetCount);
+    }).toList();
     // Sort path using sort path delegate.
     Singleton.sortPathDelegate.sort(_paths);
-    // Use sync method to avoid unnecessary wait.
-    _paths
-      ..forEach(getAssetCountFromPath)
-      ..forEach(getThumbnailFromPath);
+    // Populate fields to paths without awaiting.
+    for (final path in _paths) {
+      Future(() async {
+        await getAssetCountFromPath(path);
+        await getThumbnailFromPath(path);
+      });
+    }
 
     // Set first path entity as current path entity.
     if (_paths.isNotEmpty) {
       _currentPath ??= _paths.first;
     }
 
-    await getAssetsFromCurrentPath();
+    if (onlyAll) {
+      await getAssetsFromCurrentPath();
+    }
   }
 
   Completer<void>? _getAssetsFromPathCompleter;
@@ -381,9 +400,9 @@ class DefaultAssetPickerProvider
   @override
   Future<void> getAssetsFromPath([int? page, AssetPathEntity? path]) {
     Future<void> run() async {
-      final int currentPage = page ?? currentAssetsListPage;
-      final AssetPathEntity currentPath = path ?? this.currentPath!.path;
-      final List<AssetEntity> list = await currentPath.getAssetListPaged(
+      final currentPage = page ?? currentAssetsListPage;
+      final currentPath = path ?? this.currentPath!.path;
+      final list = await currentPath.getAssetListPaged(
         page: currentPage,
         size: pageSize,
       );
@@ -475,7 +494,10 @@ class DefaultAssetPickerProvider
         (PathWrapper<AssetPathEntity> p) => p.path == path.path,
       );
       if (index != -1) {
-        _paths[index] = _paths[index].copyWith(thumbnailData: data);
+        _paths[index] = _paths[index].copyWith(
+          assetCount: assetCount,
+          thumbnailData: data,
+        );
         notifyListeners();
       }
       return data;

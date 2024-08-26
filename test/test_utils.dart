@@ -122,6 +122,7 @@ class TestAssetPickerDelegate extends AssetPickerDelegate {
       ..totalAssetsCount = 1;
     final Widget picker = AssetPicker<AssetEntity, AssetPathEntity>(
       key: key,
+      permissionRequestOption: permissionRequestOption,
       builder: DefaultAssetPickerBuilderDelegate(
         provider: provider,
         initialPermission: ps,
@@ -141,6 +142,7 @@ class TestAssetPickerDelegate extends AssetPickerDelegate {
         textDelegate: pickerConfig.textDelegate,
         themeColor: pickerConfig.themeColor,
         locale: Localizations.maybeLocaleOf(context),
+        shouldAutoplayPreview: pickerConfig.shouldAutoplayPreview,
       ),
     );
     final List<AssetEntity>? result = await Navigator.of(
