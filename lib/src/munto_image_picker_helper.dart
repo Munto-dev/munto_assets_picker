@@ -32,10 +32,8 @@ class MuntoImagePickerHelper {
     primaryColorDark: Colors.grey[900],
     canvasColor: Colors.grey[850],
     scaffoldBackgroundColor: Colors.grey[900],
-    bottomAppBarColor: Colors.grey[900],
     cardColor: Colors.grey[900],
     highlightColor: Colors.transparent,
-    toggleableActiveColor: MuntorialColors.red,
     textSelectionTheme: TextSelectionThemeData(
       cursorColor: MuntorialColors.red,
       selectionColor: MuntorialColors.red.withAlpha(100),
@@ -65,5 +63,52 @@ class MuntoImagePickerHelper {
       onBackground: Colors.white,
       onError: Colors.black,
     ),
+    checkboxTheme: CheckboxThemeData(
+      fillColor: MaterialStateProperty.resolveWith<Color?>(
+          (Set<MaterialState> states) {
+        if (states.contains(MaterialState.disabled)) {
+          return null;
+        }
+        if (states.contains(MaterialState.selected)) {
+          return MuntorialColors.red;
+        }
+        return null;
+      }),
+    ),
+    radioTheme: RadioThemeData(
+      fillColor: MaterialStateProperty.resolveWith<Color?>(
+          (Set<MaterialState> states) {
+        if (states.contains(MaterialState.disabled)) {
+          return null;
+        }
+        if (states.contains(MaterialState.selected)) {
+          return MuntorialColors.red;
+        }
+        return null;
+      }),
+    ),
+    switchTheme: SwitchThemeData(
+      thumbColor: MaterialStateProperty.resolveWith<Color?>(
+          (Set<MaterialState> states) {
+        if (states.contains(MaterialState.disabled)) {
+          return null;
+        }
+        if (states.contains(MaterialState.selected)) {
+          return MuntorialColors.red;
+        }
+        return null;
+      }),
+      trackColor: MaterialStateProperty.resolveWith<Color?>(
+          (Set<MaterialState> states) {
+        if (states.contains(MaterialState.disabled)) {
+          return null;
+        }
+        if (states.contains(MaterialState.selected)) {
+          return MuntorialColors.red;
+        }
+        return null;
+      }),
+    ),
+    bottomAppBarTheme: BottomAppBarTheme(color: Colors.grey[900]),
   );
 }

@@ -2,9 +2,11 @@
 // Use of this source code is governed by an Apache license that can be found
 // in the LICENSE file.
 
+// ignore: unnecessary_library_name
 library munto_assets_picker;
 
 export 'package:photo_manager/photo_manager.dart';
+export 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
 
 export 'src/constants/config.dart';
 export 'src/constants/constants.dart';

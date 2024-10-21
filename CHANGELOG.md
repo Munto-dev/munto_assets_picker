@@ -4,7 +4,146 @@ that can be found in the LICENSE file. -->
 
 # Changelog
 
-See the [Migration Guide](guides/migration_guide.md) for the details of breaking changes between versions.
+> [!IMPORTANT]  
+> See the [Migration Guide](guides/migration_guide.md) for the details of breaking changes between versions.
+
+## Unreleased
+
+*None.*
+
+## 9.3.3
+
+### Fixes
+
+- Recovers the compatibility with Flutter 3.16.
+
+## 9.3.2
+
+### Improvements
+
+- Adapt the file type getter from the image provider to get a precise file type in grid.
+- Adds the identifier for grid item's semantics.
+- Improves preview page back button.
+
+## 9.3.1
+
+### Improvements
+
+- Do not mute the Live Photo during the preview.
+
+### Fixes
+
+- Fix the GIF indicator's layout.
+- Fix the directionality with the reverted grid item.
+
+## 9.3.0
+
+### New features
+
+- Add explicit Live Photos indicator for assets.
+
+### Improvements
+
+- Make Live Photos gesture consistent when scaling and panning.
+- Integrate `LocallyAvailableBuilder` with thumbnail options to improve the thumbnail loading speed.
+- Use `visibility_detector` and scroll observer to improve media playing experiences.
+
+### Fixes
+
+- Fix the bottom actions bar display conditions.
+
+## 9.2.2
+
+- Uses correct `isOriginal` for the `LocallyAvailableBuilder`.
+
+## 9.2.1
+
+- Improve changes when limited on iOS.
+- Use `LocallyAvailableBuilder` in the grid to provide better user awareness.
+
+## 9.2.0
+
+### New features
+
+- Introduce `AssetsChangeCallback` and `AssetsChangeRefreshPredicate`
+  to help users act according to asset changes.
+- Add `shouldAutoplayPreview` to the picker config.
+
+### Fixes
+
+- Raise detailed negative range error.
+- Fix viewer confirm button predication.
+- Enlarge GIF gradients.
+- Fix potential paths assets count unexpected merging behaviors.
+
+## 9.1.0
+
+### Improvements
+
+- Support limited permission displays on Android.
+- Improves the limited overlay padding on Android.
+- Adds permission request lock for the picker state.
+- Speeding up by splitting asset loading into separate steps.
+- Speeding up using `AdvancedCustomFilter` rather than `FilterOptionGroup` by default.
+
+### Fixes
+
+- Fix reverted index when previewing assets on Android.
+- Requests with the correct options with the picker.
+
+## 9.0.4
+
+### Fixes
+
+- Fix the app bar of the viewer that is not animating.
+- Fix loading when no assets are in the path.
+- Reset the has more to load flag between path switching.
+
+## 9.0.3
+
+### Fixes
+
+- Fix index reverting in `viewAsset`.
+
+## 9.0.2
+
+### Fixes
+
+- Fix the index with bottom items in the preview.
+
+## 9.0.1
+
+### Fixes
+
+- Fix the current asset in the picker viewer.
+
+### Improvements
+
+- Improve code formatting. 
+
+## 9.0.0
+
+### Breaking changes
+
+- Migrate to Flutter 3.16, and drop supports for previous Flutter versions.
+- Bump `photo_manager` to v3.x.
+- Export `photo_manager_image_provider`.
+- Integrate `PermissionRequestOption` for callers.
+
+### Improvements
+
+- Adapt `ThemeData` usages.
+- Use `wechat_picker_library`.
+- Make the first asset count not blocking loads.
+
+### Fixes
+
+- Fix unhandled child semantics with the app bar title.
+- Fix styles around the app bar and other widgets.
+- Fix previewing selected assets' behavior.
+- Use `PermissionRequestOption` as much as possible.
+- Raise more errors for non-synced paths.
+- Fix the experience with `shouldRevertGrid`.
 
 ## 8.8.0
 

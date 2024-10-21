@@ -2,7 +2,6 @@
 // Use of this source code is governed by an Apache license that can be found
 // in the LICENSE file.
 
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -30,7 +29,14 @@ class _MultiTabAssetPickerState extends State<MultiTabAssetPicker> {
   bool isDisplayingDetail = true;
 
   Future<void> callPicker(BuildContext context) async {
-    final PermissionState ps = await AssetPicker.permissionCheck();
+    final PermissionState ps = await AssetPicker.permissionCheck(
+      requestOption: const PermissionRequestOption(
+        androidPermission: AndroidPermission(
+          type: RequestType.all,
+          mediaLocation: false,
+        ),
+      ),
+    );
 
     final DefaultAssetPickerProvider provider = DefaultAssetPickerProvider(
       selectedAssets: entities,
@@ -387,7 +393,7 @@ class MultiTabAssetPickerBuilder extends DefaultAssetPickerBuilderDelegate {
             borderRadius: BorderRadius.circular(3),
           ),
           onPressed: p.isSelectedNotEmpty
-              ? () => Navigator.of(context).maybePop(p.selectedAssets)
+              ? () => Navigator.maybeOf(context)?.maybePop(p.selectedAssets)
               : null,
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           child: Text(
@@ -525,7 +531,7 @@ class MultiTabAssetPickerBuilder extends DefaultAssetPickerBuilderDelegate {
                       child: Column(
                         children: <Widget>[
                           Expanded(child: assetsGridBuilder(context)),
-                          if (isPreviewEnabled) bottomActionBar(context),
+                          bottomActionBar(context),
                         ],
                       ),
                     ),
@@ -555,7 +561,7 @@ class MultiTabAssetPickerBuilder extends DefaultAssetPickerBuilderDelegate {
                   appleOSLayout(context)
                 else
                   androidLayout(context),
-                if (Platform.isIOS) iOSPermissionOverlay(context),
+                permissionOverlay(context),
               ],
             ),
           ),

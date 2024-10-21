@@ -2,9 +2,8 @@
 // Use of this source code is governed by an Apache license that can be found
 // in the LICENSE file.
 
-import 'dart:io' show Platform;
+import 'dart:async';
 import 'dart:math' as math;
-import 'dart:typed_data' as typed_data;
 import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
@@ -14,24 +13,21 @@ import 'package:flutter/services.dart';
 import 'package:munto_assets_picker/src/widget/confirm_button.dart';
 import 'package:muntorial/muntorial.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:wechat_picker_library/wechat_picker_library.dart';
 
 import '../constants/constants.dart';
 import '../constants/enums.dart';
-import '../constants/extensions.dart';
 import '../constants/typedefs.dart';
 import '../delegates/asset_picker_text_delegate.dart';
-import '../internal/singleton.dart';
+import '../internals/singleton.dart';
 import '../models/path_wrapper.dart';
 import '../provider/asset_picker_provider.dart';
 import '../widget/asset_picker.dart';
 import '../widget/asset_picker_app_bar.dart';
 import '../widget/asset_picker_viewer.dart';
 import '../widget/builder/asset_entity_grid_item_builder.dart';
-import '../widget/builder/value_listenable_builder_2.dart';
-import '../widget/gaps.dart';
-import '../widget/platform_progress_indicator.dart';
-import '../widget/scale_text.dart';
 
 /// The delegate to build the whole picker's components.
 ///
@@ -51,6 +47,8 @@ abstract class AssetPickerBuilderDelegate<Asset, Path> {
     this.shouldRevertGrid,
     this.limitedPermissionOverlayPredicate,
     this.pathNameBuilder,
+    this.assetsChangeCallback,
+    this.assetsChangeRefreshPredicate,
     Color? themeColor,
     AssetPickerTextDelegate? textDelegate,
     Locale? locale,
@@ -127,6 +125,13 @@ abstract class AssetPickerBuilderDelegate<Asset, Path> {
   /// {@macro wechat_assets_picker.PathNameBuilder}
   final PathNameBuilder<AssetPathEntity>? pathNameBuilder;
 
+  /// {@macro wechat_assets_picker.AssetsChangeCallback}
+  final AssetsChangeCallback<AssetPathEntity>? assetsChangeCallback;
+
+  /// {@macro wechat_assets_picker.AssetsChangeRefreshPredicate}
+  final AssetsChangeRefreshPredicate<AssetPathEntity>?
+      assetsChangeRefreshPredicate;
+
   /// [ThemeData] for the picker.
   /// 选择器使用的主题
   ThemeData get theme => pickerTheme ?? AssetPicker.themeData(themeColor);
@@ -196,20 +201,24 @@ abstract class AssetPickerBuilderDelegate<Asset, Path> {
   /// 权限受限栏的高度
   double get permissionLimitedBarHeight => isPermissionLimited ? 75 : 0;
 
+  @Deprecated('Use permissionNotifier instead. This will be removed in 10.0.0')
+  ValueNotifier<PermissionState> get permission => permissionNotifier;
+
   /// Notifier for the current [PermissionState].
   /// 当前 [PermissionState] 的监听
-  late final ValueNotifier<PermissionState> permission =
-      ValueNotifier<PermissionState>(
+  late final permissionNotifier = ValueNotifier<PermissionState>(
     initialPermission,
   );
-  late final ValueNotifier<bool> permissionOverlayDisplay = ValueNotifier<bool>(
-    limitedPermissionOverlayPredicate?.call(permission.value) ??
-        (permission.value == PermissionState.limited),
+
+  late final permissionOverlayDisplay = ValueNotifier<bool>(
+    limitedPermissionOverlayPredicate?.call(permissionNotifier.value) ??
+        (permissionNotifier.value == PermissionState.limited),
   );
 
   /// Whether the permission is limited currently.
   /// 当前的权限是否为受限
-  bool get isPermissionLimited => permission.value == PermissionState.limited;
+  bool get isPermissionLimited =>
+      permissionNotifier.value == PermissionState.limited;
 
   bool effectiveShouldRevertGrid(BuildContext context) =>
       shouldRevertGrid ?? isAppleOS(context);
@@ -231,7 +240,7 @@ abstract class AssetPickerBuilderDelegate<Asset, Path> {
     Singleton.scrollPosition = null;
     gridScrollController.dispose();
     isSwitchingPath.dispose();
-    permission.dispose();
+    permissionNotifier.dispose();
     permissionOverlayDisplay.dispose();
   }
 
@@ -241,17 +250,16 @@ abstract class AssetPickerBuilderDelegate<Asset, Path> {
   @protected
   void selectAsset(BuildContext context, Asset asset, int index, bool selected);
 
+  /// Throttle the assets changing calls.
+  Completer<void>? onAssetsChangedLock;
+
   /// Called when assets changed and obtained notifications from the OS.
   /// 系统发出资源变更的通知时调用的方法
   Future<void> onAssetsChanged(MethodCall call, StateSetter setState) async {}
 
   /// Determine how to browse assets in the viewer.
   /// 定义如何在查看器中浏览资源
-  Future<void> viewAsset(
-    BuildContext context,
-    int index,
-    AssetEntity currentAsset,
-  );
+  Future<void> viewAsset(BuildContext context, int? index, Asset currentAsset);
 
   /// Yes, the build method.
   /// 没错，是它是它就是它，我们亲爱的 build 方法~
@@ -399,16 +407,19 @@ abstract class AssetPickerBuilderDelegate<Asset, Path> {
   /// GIF image type indicator.
   /// GIF 类型图片指示
   Widget gifIndicator(BuildContext context, Asset asset) {
-    return PositionedDirectional(
-      start: 0,
-      bottom: 0,
+    return Align(
+      alignment: Alignment.bottomCenter,
       child: Container(
+        width: double.infinity,
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: AlignmentDirectional.bottomCenter,
             end: AlignmentDirectional.topCenter,
-            colors: <Color>[theme.dividerColor, Colors.transparent],
+            colors: <Color>[
+              theme.canvasColor.withAlpha(128),
+              Colors.transparent,
+            ],
           ),
         ),
         child: Container(
@@ -422,15 +433,41 @@ abstract class AssetPickerBuilderDelegate<Asset, Path> {
           child: ScaleText(
             textDelegate.gifIndicator,
             style: TextStyle(
-              color: isAppleOS(context)
-                  ? theme.textTheme.bodyMedium?.color
-                  : theme.primaryColor,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
+              color: theme.textTheme.bodyMedium?.color,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
             ),
             semanticsLabel: semanticsTextDelegate.gifIndicator,
             strutStyle: const StrutStyle(forceStrutHeight: true, height: 1),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget buildLivePhotoIndicator(BuildContext context, Asset asset) {
+    return Align(
+      alignment: AlignmentDirectional.bottomCenter,
+      child: Container(
+        width: double.maxFinite,
+        height: 26,
+        alignment: AlignmentDirectional.bottomStart,
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: AlignmentDirectional.bottomCenter,
+            end: AlignmentDirectional.topCenter,
+            colors: <Color>[
+              theme.canvasColor.withAlpha(80),
+              Colors.transparent,
+            ],
+          ),
+        ),
+        child: Image.asset(
+          'assets/icon/indicator-live-photos.png',
+          package: packageName,
+          gaplessPlayback: true,
+          color: Colors.white,
         ),
       ),
     );
@@ -530,35 +567,44 @@ abstract class AssetPickerBuilderDelegate<Asset, Path> {
   /// Action bar widget aligned to bottom.
   /// 底部操作栏部件
   Widget bottomActionBar(BuildContext context) {
-    Widget child = Container(
-      height: bottomActionBarHeight + context.bottomPadding,
-      padding: const EdgeInsets.symmetric(horizontal: 20).copyWith(
-        bottom: context.bottomPadding,
+    final children = <Widget>[
+      if (isPermissionLimited) accessLimitedBottomTip(context),
+      Container(
+        height: bottomActionBarHeight + context.bottomPadding,
+        padding: const EdgeInsets.symmetric(horizontal: 20).copyWith(
+          bottom: context.bottomPadding,
+        ),
+        color: theme.bottomAppBarTheme.color?.withOpacity(
+          theme.bottomAppBarTheme.color!.opacity *
+              (isAppleOS(context) ? .9 : 1),
+        ),
+        child: Row(
+          children: <Widget>[
+            previewButton(context),
+            if (!isSingleAssetMode) const Spacer(),
+            if (!isSingleAssetMode) confirmButton(context),
+          ],
+        ),
       ),
-      color: theme.primaryColor.withOpacity(isAppleOS(context) ? 0.90 : 1),
-      child: Row(
-        children: <Widget>[
-          previewButton(context),
-          const Spacer(),
-          confirmButton(context),
-        ],
-      ),
+    ];
+    if (children.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    Widget child = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: children,
     );
-    if (isPermissionLimited) {
-      child = Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[accessLimitedBottomTip(context), child],
+    if (isAppleOS(context)) {
+      child = ClipRect(
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(
+            sigmaX: appleOSBlurRadius,
+            sigmaY: appleOSBlurRadius,
+          ),
+          child: child,
+        ),
       );
     }
-    child = ClipRect(
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(
-          sigmaX: appleOSBlurRadius,
-          sigmaY: appleOSBlurRadius,
-        ),
-        child: child,
-      ),
-    );
     return child;
   }
 
@@ -568,21 +614,34 @@ abstract class AssetPickerBuilderDelegate<Asset, Path> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: IconButton(
-        onPressed: Navigator.of(context).maybePop,
-        tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-        icon: const Icon(Icons.close),
+        onPressed: () {
+          Navigator.maybeOf(context)?.maybePop();
+        },
+        tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+        icon: Icon(
+          Icons.close,
+          semanticLabel: MaterialLocalizations.of(context).closeButtonTooltip,
+        ),
       ),
     );
   }
 
   /// The overlay when the permission is limited on iOS.
+  @Deprecated('Use permissionOverlay instead. This will be removed in 10.0.0')
   Widget iOSPermissionOverlay(BuildContext context) {
+    return permissionOverlay(context);
+  }
+
+  /// The overlay when the permission is limited.
+  Widget permissionOverlay(BuildContext context) {
     final Size size = MediaQuery.sizeOf(context);
     final Widget closeButton = Container(
       margin: const EdgeInsetsDirectional.only(start: 16, top: 4),
       alignment: AlignmentDirectional.centerStart,
       child: IconButton(
-        onPressed: Navigator.of(context).maybePop,
+        onPressed: () {
+          Navigator.maybeOf(context)?.maybePop();
+        },
         icon: const Icon(Icons.close),
         padding: EdgeInsets.zero,
         constraints: BoxConstraints.tight(const Size.square(32)),
@@ -652,7 +711,9 @@ abstract class AssetPickerBuilderDelegate<Asset, Path> {
     );
 
     final Widget accessLimitedButton = GestureDetector(
-      onTap: () => permissionOverlayDisplay.value = false,
+      onTap: () {
+        permissionOverlayDisplay.value = false;
+      },
       child: Text(
         textDelegate.accessLimitedAssets,
         style: MuntorialTextStyles.size14Regular.singleLine.white,
@@ -662,7 +723,7 @@ abstract class AssetPickerBuilderDelegate<Asset, Path> {
     );
 
     return ValueListenableBuilder2<PermissionState, bool>(
-      firstNotifier: permission,
+      firstNotifier: permissionNotifier,
       secondNotifier: permissionOverlayDisplay,
       builder: (_, PermissionState ps, bool isDisplay, __) {
         if (ps.isAuth || !isDisplay) {
@@ -672,7 +733,7 @@ abstract class AssetPickerBuilderDelegate<Asset, Path> {
           child: Semantics(
             sortKey: const OrdinalSortKey(0),
             child: Container(
-              padding: MediaQuery.paddingOf(context),
+              padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top),
               color: MuntorialColors.black,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -682,6 +743,12 @@ abstract class AssetPickerBuilderDelegate<Asset, Path> {
                   goToSettingsButton,
                   const SizedBox(height: 24),
                   accessLimitedButton,
+                  SizedBox(
+                    height: math.max(
+                      MediaQuery.paddingOf(context).bottom,
+                      24.0,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -706,6 +773,8 @@ class DefaultAssetPickerBuilderDelegate
     super.shouldRevertGrid,
     super.limitedPermissionOverlayPredicate,
     super.pathNameBuilder,
+    super.assetsChangeCallback,
+    super.assetsChangeRefreshPredicate,
     super.themeColor,
     super.textDelegate,
     super.locale,
@@ -713,6 +782,7 @@ class DefaultAssetPickerBuilderDelegate
     this.previewThumbnailSize,
     this.specialPickerType,
     this.keepScrollOffset = false,
+    this.shouldAutoplayPreview = false,
   }) {
     // Add the listener if [keepScrollOffset] is true.
     if (keepScrollOffset) {
@@ -767,6 +837,10 @@ class DefaultAssetPickerBuilderDelegate
   /// 选择器是否可以从同样的位置开始选择
   final bool keepScrollOffset;
 
+  /// Whether the preview should auto play.
+  /// 预览是否自动播放
+  final bool shouldAutoplayPreview;
+
   /// [Duration] when triggering path switching.
   /// 切换路径时的动画时长
   Duration get switchingPathDuration => const Duration(milliseconds: 300);
@@ -786,6 +860,9 @@ class DefaultAssetPickerBuilderDelegate
 
   @override
   bool get isSingleAssetMode => provider.maxAssets == 1;
+
+  /// Whether the bottom actions bar should display.
+  bool get hasBottomActions => isPreviewEnabled || !isSingleAssetMode;
 
   /// The listener to track the scroll position of the [gridScrollController]
   /// if [keepScrollOffset] is true.
@@ -834,82 +911,143 @@ class DefaultAssetPickerBuilderDelegate
     }
     provider.selectAsset(asset);
     if (isSingleAssetMode && !isPreviewEnabled) {
-      Navigator.of(context).maybePop(provider.selectedAssets);
+      Navigator.maybeOf(context)?.maybePop(provider.selectedAssets);
     }
   }
 
   @override
   Future<void> onAssetsChanged(MethodCall call, StateSetter setState) async {
-    if (!isPermissionLimited) {
+    final permission = permissionNotifier.value;
+
+    bool predicate() {
+      final path = provider.currentPath?.path;
+      if (assetsChangeRefreshPredicate != null) {
+        return assetsChangeRefreshPredicate!(permission, call, path);
+      }
+      return path?.isAll == true;
+    }
+
+    if (!predicate()) {
       return;
     }
-    isSwitchingPath.value = false;
-    if (call.arguments is Map) {
-      final Map<dynamic, dynamic> arguments =
-          call.arguments as Map<dynamic, dynamic>;
-      if (arguments['newCount'] == 0) {
-        provider
-          ..currentAssets = <AssetEntity>[]
-          ..currentPath = null
-          ..selectedAssets = <AssetEntity>[]
-          ..hasAssetsToDisplay = false
-          ..isAssetsEmpty = true
-          ..totalAssetsCount = 0
-          ..paths = [];
+
+    assetsChangeCallback?.call(permission, call, provider.currentPath?.path);
+
+    final createIds = <String>[];
+    final updateIds = <String>[];
+    final deleteIds = <String>[];
+    int newCount = 0;
+    int oldCount = 0;
+
+    // Typically for iOS.
+    if (call.arguments case final Map arguments) {
+      if (arguments['newCount'] case final int count) {
+        newCount = count;
+      }
+      if (arguments['oldCount'] case final int count) {
+        oldCount = count;
+      }
+      for (final e in (arguments['create'] as List?) ?? []) {
+        if (e['id'] case final String id) {
+          createIds.add(id);
+        }
+      }
+      for (final e in (arguments['update'] as List?) ?? []) {
+        if (e['id'] case final String id) {
+          updateIds.add(id);
+        }
+      }
+      for (final e in (arguments['delete'] as List?) ?? []) {
+        if (e['id'] case final String id) {
+          deleteIds.add(id);
+        }
+      }
+      if (createIds.isEmpty &&
+          updateIds.isEmpty &&
+          deleteIds.isEmpty &&
+          // Updates with limited permission on iOS does not provide any IDs.
+          // Counting on length changes is not reliable.
+          (newCount == oldCount && permission != PermissionState.limited)) {
         return;
       }
     }
-    await provider.getPaths();
-    provider.currentPath = provider.paths.first;
-    final PathWrapper<AssetPathEntity>? currentWrapper = provider.currentPath;
-    if (currentWrapper != null) {
-      final AssetPathEntity newPath =
-          await currentWrapper.path.obtainForNewProperties();
-      final int assetCount = await newPath.assetCountAsync;
-      final PathWrapper<AssetPathEntity> newPathWrapper =
-          PathWrapper<AssetPathEntity>(
-        path: newPath,
-        assetCount: assetCount,
-      );
-      provider
-        ..currentPath = newPathWrapper
-        ..hasAssetsToDisplay = assetCount != 0
-        ..isAssetsEmpty = assetCount == 0
-        ..totalAssetsCount = assetCount
-        ..getThumbnailFromPath(newPathWrapper);
-      if (newPath.isAll) {
-        await provider.getAssetsFromCurrentPath();
-        final List<AssetEntity> entitiesShouldBeRemoved = <AssetEntity>[];
-        for (final AssetEntity entity in provider.selectedAssets) {
-          if (!provider.currentAssets.contains(entity)) {
-            entitiesShouldBeRemoved.add(entity);
-          }
-        }
-        entitiesShouldBeRemoved.forEach(provider.selectedAssets.remove);
-      }
+    // Throttle handling.
+    if (onAssetsChangedLock case final lock?) {
+      return lock.future;
     }
+    final lock = Completer<void>();
+    onAssetsChangedLock = lock;
+
+    Future<void>(() async {
+      // Replace the updated assets if update only.
+      if (updateIds.isNotEmpty && createIds.isEmpty && deleteIds.isEmpty) {
+        await Future.wait(
+          updateIds.map((id) async {
+            final i = provider.currentAssets.indexWhere((e) => e.id == id);
+            if (i != -1) {
+              final asset =
+                  await provider.currentAssets[i].obtainForNewProperties();
+              provider.currentAssets[i] = asset!;
+            }
+          }),
+        );
+        return;
+      }
+
+      await provider.getPaths(keepPreviousCount: true);
+      provider.currentPath = provider.paths.first;
+      final currentWrapper = provider.currentPath;
+      if (currentWrapper != null) {
+        final newPath = await currentWrapper.path.obtainForNewProperties();
+        final assetCount = await newPath.assetCountAsync;
+        final newPathWrapper = PathWrapper<AssetPathEntity>(
+          path: newPath,
+          assetCount: assetCount,
+        );
+        if (newPath.isAll) {
+          await provider.getAssetsFromCurrentPath();
+          final entitiesShouldBeRemoved = <AssetEntity>[];
+          for (final entity in provider.selectedAssets) {
+            if (!provider.currentAssets.contains(entity)) {
+              entitiesShouldBeRemoved.add(entity);
+            }
+          }
+          entitiesShouldBeRemoved.forEach(provider.selectedAssets.remove);
+        }
+        provider
+          ..currentPath = newPathWrapper
+          ..hasAssetsToDisplay = assetCount != 0
+          ..isAssetsEmpty = assetCount == 0
+          ..totalAssetsCount = assetCount
+          ..getThumbnailFromPath(newPathWrapper);
+      }
+      isSwitchingPath.value = false;
+    }).then(lock.complete).catchError(lock.completeError).whenComplete(() {
+      onAssetsChangedLock = null;
+    });
   }
 
   @override
   Future<void> viewAsset(
     BuildContext context,
-    int index,
+    int? index,
     AssetEntity currentAsset,
   ) async {
-    final DefaultAssetPickerProvider provider =
-        context.read<DefaultAssetPickerProvider>();
+    final p = context.read<DefaultAssetPickerProvider>();
     // - When we reached the maximum select count and the asset is not selected,
     //   do nothing.
     // - When the special type is WeChat Moment, pictures and videos cannot
     //   be selected at the same time. Video select should be banned if any
     //   pictures are selected.
-    if ((!provider.selectedAssets.contains(currentAsset) &&
-            provider.selectedMaximumAssets) ||
+    if ((!p.selectedAssets.contains(currentAsset) && p.selectedMaximumAssets) ||
         (isWeChatMoment &&
             currentAsset.type == AssetType.video &&
-            provider.selectedAssets.isNotEmpty)) {
+            p.selectedAssets.isNotEmpty)) {
       return;
     }
+    final revert = effectiveShouldRevertGrid(context);
+    // ignore: no_leading_underscores_for_local_identifiers
+    final int _debugFlow; // Only for debug process.
     final List<AssetEntity> current;
     final List<AssetEntity>? selected;
     final int effectiveIndex;
@@ -918,17 +1056,49 @@ class DefaultAssetPickerBuilderDelegate
         current = <AssetEntity>[currentAsset];
         selected = null;
         effectiveIndex = 0;
+        _debugFlow = 10;
       } else {
-        current = provider.currentAssets
-            .where((AssetEntity e) => e.type == AssetType.image)
-            .toList();
-        selected = provider.selectedAssets;
-        effectiveIndex = current.indexOf(currentAsset);
+        final List<AssetEntity> list;
+        if (index == null) {
+          list = p.selectedAssets.reversed.toList(growable: false);
+        } else {
+          list = p.currentAssets;
+        }
+        current = list.where((e) => e.type == AssetType.image).toList();
+        selected = p.selectedAssets;
+        final i = current.indexOf(currentAsset);
+        effectiveIndex = revert ? current.length - i - 1 : i;
+        _debugFlow = switch ((index == null, revert)) {
+          (true, true) => 21,
+          (true, false) => 20,
+          (false, true) => 31,
+          (false, false) => 30,
+        };
       }
     } else {
-      current = provider.currentAssets;
-      selected = provider.selectedAssets;
-      effectiveIndex = index;
+      selected = p.selectedAssets;
+      final List<AssetEntity> list;
+      if (index == null) {
+        if (revert) {
+          list = p.selectedAssets.reversed.toList(growable: false);
+        } else {
+          list = p.selectedAssets;
+        }
+        effectiveIndex = selected.indexOf(currentAsset);
+        current = list;
+      } else {
+        current = p.currentAssets;
+        effectiveIndex = revert ? current.length - index - 1 : index;
+      }
+      _debugFlow = switch ((index == null, revert)) {
+        (true, true) => 41,
+        (true, false) => 40,
+        (false, true) => 51,
+        (false, false) => 50,
+      };
+    }
+    if (current.isEmpty) {
+      throw StateError('Previewing empty assets is not allowed. $_debugFlow');
     }
     final List<AssetEntity>? result = await AssetPickerViewer.pushToViewer(
       context,
@@ -938,20 +1108,20 @@ class DefaultAssetPickerBuilderDelegate
       previewThumbnailSize: previewThumbnailSize,
       selectPredicate: selectPredicate,
       selectedAssets: selected,
-      selectorProvider: provider,
+      selectorProvider: p,
       specialPickerType: specialPickerType,
-      maxAssets: provider.maxAssets,
-      shouldReversePreview: isAppleOS(context),
+      maxAssets: p.maxAssets,
+      shouldReversePreview: revert,
+      shouldAutoplayPreview: shouldAutoplayPreview,
     );
     if (result != null) {
-      Navigator.of(context).maybePop(result);
+      Navigator.maybeOf(context)?.maybePop(result);
     }
   }
 
   @override
   AssetPickerAppBar appBar(BuildContext context) {
     final AssetPickerAppBar appBar = AssetPickerAppBar(
-      backgroundColor: theme.appBarTheme.backgroundColor,
       title: Semantics(
         onTapHint: semanticsTextDelegate.sActionSwitchPathLabel,
         child: pathEntitySelector(context),
@@ -980,8 +1150,7 @@ class DefaultAssetPickerBuilderDelegate
                         child: Column(
                           children: <Widget>[
                             Expanded(child: assetsGridBuilder(context)),
-                            if (isPreviewEnabled || !isSingleAssetMode)
-                              bottomActionBar(context),
+                            bottomActionBar(context),
                           ],
                         ),
                       ),
@@ -1007,8 +1176,7 @@ class DefaultAssetPickerBuilderDelegate
             child: Stack(
               children: <Widget>[
                 Positioned.fill(child: assetsGridBuilder(context)),
-                if (isPreviewEnabled || !isSingleAssetMode)
-                  Positioned.fill(top: null, child: bottomActionBar(context)),
+                Positioned.fill(top: null, child: bottomActionBar(context)),
               ],
             ),
           ),
@@ -1083,11 +1251,7 @@ class DefaultAssetPickerBuilderDelegate
     final bool gridRevert = effectiveShouldRevertGrid(context);
     return Selector<DefaultAssetPickerProvider, PathWrapper<AssetPathEntity>?>(
       selector: (_, DefaultAssetPickerProvider p) => p.currentPath,
-      builder: (
-        BuildContext context,
-        PathWrapper<AssetPathEntity>? wrapper,
-        _,
-      ) {
+      builder: (context, wrapper, _) {
         // First, we need the count of the assets.
         int totalCount = wrapper?.assetCount ?? 0;
         final Widget? specialItem;
@@ -1126,30 +1290,29 @@ class DefaultAssetPickerBuilderDelegate
         final double topPadding =
             context.topPadding + appBarPreferredSize!.height;
 
+        final textDirection = Directionality.of(context);
         Widget sliverGrid(BuildContext context, List<AssetEntity> assets) {
           return SliverGrid(
             delegate: SliverChildBuilderDelegate(
-              (_, int index) => Builder(
-                builder: (BuildContext context) {
-                  if (gridRevert) {
-                    if (index < placeholderCount) {
-                      return const SizedBox.shrink();
-                    }
-                    index -= placeholderCount;
+              (context, int index) {
+                if (gridRevert) {
+                  if (index < placeholderCount) {
+                    return const SizedBox.shrink();
                   }
-                  return MergeSemantics(
-                    child: Directionality(
-                      textDirection: Directionality.of(context),
-                      child: assetGridItemBuilder(
-                        context,
-                        index,
-                        assets,
-                        specialItem: specialItem,
-                      ),
+                  index -= placeholderCount;
+                }
+                return MergeSemantics(
+                  child: Directionality(
+                    textDirection: textDirection,
+                    child: assetGridItemBuilder(
+                      context,
+                      index,
+                      assets,
+                      specialItem: specialItem,
                     ),
-                  );
-                },
-              ),
+                  ),
+                );
+              },
               childCount: assetsGridItemCount(
                 context: context,
                 assets: assets,
@@ -1360,6 +1523,7 @@ class DefaultAssetPickerBuilderDelegate
               hint += ', ${asset.title}';
             }
             return Semantics(
+              key: ValueKey('${asset.id}-semantics'),
               button: false,
               enabled: !isBanned,
               excludeSemantics: true,
@@ -1371,10 +1535,14 @@ class DefaultAssetPickerBuilderDelegate
               hint: hint,
               image: asset.type == AssetType.image ||
                   asset.type == AssetType.video,
-              onTap: () => selectAsset(context, asset, index, isSelected),
+              onTap: () {
+                selectAsset(context, asset, index, isSelected);
+              },
               onTapHint: semanticsTextDelegate.sActionSelectHint,
               onLongPress: isPreviewEnabled
-                  ? () => viewAsset(context, index, asset)
+                  ? () {
+                      viewAsset(context, index, asset);
+                    }
                   : null,
               onLongPressHint: semanticsTextDelegate.sActionPreviewHint,
               selected: isSelected,
@@ -1387,7 +1555,9 @@ class DefaultAssetPickerBuilderDelegate
                 // Regression https://github.com/flutter/flutter/issues/35112.
                 onLongPress: isPreviewEnabled &&
                         MediaQuery.accessibleNavigationOf(context)
-                    ? () => viewAsset(context, index, asset)
+                    ? () {
+                        viewAsset(context, index, asset);
+                      }
                     : null,
                 child: IndexedSemantics(
                   index: semanticIndex(index),
@@ -1456,7 +1626,7 @@ class DefaultAssetPickerBuilderDelegate
         gradient: LinearGradient(
           begin: AlignmentDirectional.bottomCenter,
           end: AlignmentDirectional.topCenter,
-          colors: <Color>[theme.dividerColor, Colors.transparent],
+          colors: <Color>[theme.splashColor, Colors.transparent],
         ),
       ),
       child: Padding(
@@ -1487,7 +1657,7 @@ class DefaultAssetPickerBuilderDelegate
             gradient: LinearGradient(
               begin: AlignmentDirectional.topCenter,
               end: AlignmentDirectional.bottomCenter,
-              colors: <Color>[theme.dividerColor, Colors.transparent],
+              colors: <Color>[theme.splashColor, Colors.transparent],
             ),
           ),
           child: Padding(
@@ -1539,12 +1709,14 @@ class DefaultAssetPickerBuilderDelegate
           height: appBarItemHeight,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           color: theme.colorScheme.secondary,
-          disabledColor: theme.dividerColor,
+          disabledColor: theme.splashColor,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(3),
           ),
           onPressed: shouldAllowConfirm
-              ? () => Navigator.of(context).maybePop(p.selectedAssets)
+              ? () {
+                  Navigator.maybeOf(context)?.maybePop(p.selectedAssets);
+                }
               : null,
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           child: ScaleText(
@@ -1575,32 +1747,62 @@ class DefaultAssetPickerBuilderDelegate
     int index,
     AssetEntity asset,
   ) {
-    final AssetEntityImageProvider imageProvider = AssetEntityImageProvider(
-      asset,
+    return LocallyAvailableBuilder(
+      asset: asset,
       isOriginal: false,
-      thumbnailSize: gridThumbnailSize,
-    );
-    SpecialImageType? type;
-    if (imageProvider.imageFileType == ImageFileType.gif) {
-      type = SpecialImageType.gif;
-    } else if (imageProvider.imageFileType == ImageFileType.heic) {
-      type = SpecialImageType.heic;
-    }
-    return Stack(
-      children: <Widget>[
-        Positioned.fill(
-          child: RepaintBoundary(
-            child: AssetEntityGridItemBuilder(
-              image: imageProvider,
-              failedItemBuilder: failedItemBuilder,
+      withSubtype: false,
+      thumbnailOption: ThumbnailOption(size: gridThumbnailSize),
+      builder: (context, asset) {
+        final imageProvider = AssetEntityImageProvider(
+          asset,
+          isOriginal: false,
+          thumbnailSize: gridThumbnailSize,
+        );
+        return Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            RepaintBoundary(
+              child: AssetEntityGridItemBuilder(
+                image: imageProvider,
+                failedItemBuilder: failedItemBuilder,
+              ),
             ),
+            FutureBuilder(
+              future: imageProvider.imageFileType,
+              builder: (context, snapshot) {
+                if (snapshot.data case final type?
+                    when type == ImageFileType.gif) {
+                  return gifIndicator(context, asset);
+                }
+                return const SizedBox.shrink();
+              },
+            ),
+            if (asset.type == AssetType.video) // 如果为视频则显示标识
+              videoIndicator(context, asset),
+            if (asset.isLivePhoto) buildLivePhotoIndicator(context, asset),
+          ],
+        );
+      },
+      progressBuilder: (context, state, progress) => Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            state == PMRequestState.failed
+                ? Icons.cloud_off
+                : Icons.cloud_download_outlined,
+            color: context.iconTheme.color?.withOpacity(.4),
+            size: 24.0,
           ),
-        ),
-        if (type == SpecialImageType.gif) // 如果为GIF则显示标识
-          gifIndicator(context, asset),
-        if (asset.type == AssetType.video) // 如果为视频则显示标识
-          videoIndicator(context, asset),
-      ],
+          if (state != PMRequestState.success && state != PMRequestState.failed)
+            ScaleText(
+              ' ${((progress ?? 0) * 100).toInt()}%',
+              style: TextStyle(
+                color: context.textTheme.bodyMedium?.color?.withOpacity(.4),
+                fontSize: 12.0,
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -1617,7 +1819,9 @@ class DefaultAssetPickerBuilderDelegate
           ignoring: !isSwitchingPath,
           child: ExcludeSemantics(
             child: GestureDetector(
-              onTap: () => this.isSwitchingPath.value = false,
+              onTap: () {
+                this.isSwitchingPath.value = false;
+              },
               child: AnimatedOpacity(
                 duration: switchingPathDuration,
                 opacity: isSwitchingPath ? .75 : 0,
@@ -1671,7 +1875,7 @@ class DefaultAssetPickerBuilderDelegate
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             ValueListenableBuilder<PermissionState>(
-              valueListenable: permission,
+              valueListenable: permissionNotifier,
               builder: (_, PermissionState ps, Widget? child) => Semantics(
                 label: '${semanticsTextDelegate.viewingLimitedAssetsTip}, '
                     '${semanticsTextDelegate.changeAccessibleLimitedAssets}',
@@ -1778,7 +1982,7 @@ class DefaultAssetPickerBuilderDelegate
           padding: const EdgeInsetsDirectional.only(start: 12, end: 6),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(999),
-            color: theme.dividerColor,
+            color: theme.focusColor,
           ),
           child: Selector<DefaultAssetPickerProvider,
               PathWrapper<AssetPathEntity>?>(
@@ -1845,7 +2049,7 @@ class DefaultAssetPickerBuilderDelegate
   }) {
     final PathWrapper<AssetPathEntity> wrapper = list[index];
     final AssetPathEntity pathEntity = wrapper.path;
-    final typed_data.Uint8List? data = wrapper.thumbnailData;
+    final Uint8List? data = wrapper.thumbnailData;
 
     Widget builder() {
       if (data != null) {
@@ -1908,32 +2112,15 @@ class DefaultAssetPickerBuilderDelegate
                           end: 20,
                         ),
                         child: ExcludeSemantics(
-                          child: Row(
-                            children: <Widget>[
-                              Flexible(
-                                child: Padding(
-                                  padding: const EdgeInsetsDirectional.only(
-                                    end: 10,
-                                  ),
-                                  child: ScaleText(
-                                    name,
-                                    style: const TextStyle(fontSize: 17),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ),
+                          child: ScaleText.rich(
+                            [
+                              TextSpan(text: name),
                               if (semanticsCount != null)
-                                ScaleText(
-                                  '($semanticsCount)',
-                                  style: TextStyle(
-                                    color: theme.textTheme.bodySmall?.color,
-                                    fontSize: 17,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                                TextSpan(text: ' ($semanticsCount)'),
                             ],
+                            style: const TextStyle(fontSize: 17),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ),
@@ -1971,7 +2158,9 @@ class DefaultAssetPickerBuilderDelegate
       child: Consumer<DefaultAssetPickerProvider>(
         builder: (context, DefaultAssetPickerProvider p, __) => GestureDetector(
           onTap: p.isSelectedNotEmpty
-              ? () => viewAsset(context, 0, p.selectedAssets.first)
+              ? () {
+                  viewAsset(context, null, p.selectedAssets.first);
+                }
               : null,
           child: Selector<DefaultAssetPickerProvider, String>(
             selector: (_, DefaultAssetPickerProvider p) =>
@@ -2050,7 +2239,9 @@ class DefaultAssetPickerBuilderDelegate
         );
         final Widget selectorWidget = GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () => selectAsset(context, asset, index, selected),
+          onTap: () {
+            selectAsset(context, asset, index, selected);
+          },
           child: Container(
             margin: EdgeInsets.all(indicatorSize / 4),
             width: isPreviewEnabled ? indicatorSize : null,
@@ -2079,7 +2270,11 @@ class DefaultAssetPickerBuilderDelegate
         MediaQuery.sizeOf(context).width / gridCount / 3;
     return Positioned.fill(
       child: GestureDetector(
-        onTap: isPreviewEnabled ? () => viewAsset(context, index, asset) : null,
+        onTap: isPreviewEnabled
+            ? () {
+                viewAsset(context, index, asset);
+              }
+            : null,
         child: Consumer<DefaultAssetPickerProvider>(
           builder: (_, DefaultAssetPickerProvider p, __) {
             final int index = p.selectedAssets.indexOf(asset);
@@ -2126,10 +2321,8 @@ class DefaultAssetPickerBuilderDelegate
   /// 将指示器的图标和文字设置为 [Colors.white]。
   @override
   Widget videoIndicator(BuildContext context, AssetEntity asset) {
-    return PositionedDirectional(
-      start: 0,
-      end: 0,
-      bottom: 0,
+    return Align(
+      alignment: Alignment.bottomCenter,
       child: Container(
         width: double.maxFinite,
         height: 26,
@@ -2138,7 +2331,7 @@ class DefaultAssetPickerBuilderDelegate
           gradient: LinearGradient(
             begin: AlignmentDirectional.bottomCenter,
             end: AlignmentDirectional.topCenter,
-            colors: <Color>[theme.dividerColor, Colors.transparent],
+            colors: <Color>[theme.splashColor, Colors.transparent],
           ),
         ),
         child: Row(
@@ -2172,36 +2365,92 @@ class DefaultAssetPickerBuilderDelegate
   }
 
   @override
-  Widget bottomActionBar(BuildContext context) {
-    Widget child = Container(
-      height: bottomActionBarHeight + context.bottomPadding,
-      padding: const EdgeInsets.symmetric(horizontal: 20).copyWith(
-        bottom: context.bottomPadding,
-      ),
-      color: theme.primaryColor.withOpacity(isAppleOS(context) ? .9 : 1),
-      child: Row(
-        children: <Widget>[
-          if (isPreviewEnabled) previewButton(context),
-          if (isPreviewEnabled || !isSingleAssetMode) const Spacer(),
-          if (isPreviewEnabled || !isSingleAssetMode) confirmButton(context),
-        ],
+  Widget accessLimitedBottomTip(BuildContext context) {
+    final double bottomPadding;
+    if (hasBottomActions) {
+      bottomPadding = 0;
+    } else {
+      bottomPadding = MediaQuery.paddingOf(context).bottom;
+    }
+    return GestureDetector(
+      onTap: () {
+        Feedback.forTap(context);
+        PhotoManager.openSetting();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10)
+            .add(EdgeInsets.only(bottom: bottomPadding)),
+        height: permissionLimitedBarHeight + bottomPadding,
+        color: theme.primaryColor.withOpacity(isAppleOS(context) ? 0.90 : 1),
+        child: Row(
+          children: <Widget>[
+            const SizedBox(width: 5),
+            Icon(
+              Icons.warning,
+              color: Colors.orange[400]!.withOpacity(.8),
+            ),
+            const SizedBox(width: 15),
+            Expanded(
+              child: ScaleText(
+                textDelegate.accessAllTip,
+                style: context.textTheme.bodySmall?.copyWith(
+                  fontSize: 14,
+                ),
+                semanticsLabel: semanticsTextDelegate.accessAllTip,
+              ),
+            ),
+            Icon(
+              Icons.keyboard_arrow_right,
+              color: context.iconTheme.color?.withOpacity(.5),
+            ),
+          ],
+        ),
       ),
     );
-    if (isPermissionLimited) {
-      child = Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[accessLimitedBottomTip(context), child],
+  }
+
+  @override
+  Widget bottomActionBar(BuildContext context) {
+    final children = <Widget>[
+      if (isPermissionLimited) accessLimitedBottomTip(context),
+      if (hasBottomActions)
+        Container(
+          height: bottomActionBarHeight + context.bottomPadding,
+          padding: const EdgeInsets.symmetric(horizontal: 20).copyWith(
+            bottom: context.bottomPadding,
+          ),
+          color: theme.bottomAppBarTheme.color?.withOpacity(
+            theme.bottomAppBarTheme.color!.opacity *
+                (isAppleOS(context) ? .9 : 1),
+          ),
+          child: Row(
+            children: <Widget>[
+              if (isPreviewEnabled) previewButton(context),
+              if (isPreviewEnabled || !isSingleAssetMode) const Spacer(),
+              if (isPreviewEnabled || !isSingleAssetMode)
+                confirmButton(context),
+            ],
+          ),
+        ),
+    ];
+    if (children.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    Widget child = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: children,
+    );
+    if (isAppleOS(context)) {
+      child = ClipRect(
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(
+            sigmaX: appleOSBlurRadius,
+            sigmaY: appleOSBlurRadius,
+          ),
+          child: child,
+        ),
       );
     }
-    child = ClipRect(
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(
-          sigmaX: appleOSBlurRadius,
-          sigmaY: appleOSBlurRadius,
-        ),
-        child: child,
-      ),
-    );
     return child;
   }
 
@@ -2217,22 +2466,22 @@ class DefaultAssetPickerBuilderDelegate
         }
       });
     }
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: overlayStyle,
-      child: Theme(
-        data: theme,
+    return Theme(
+      data: theme,
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: overlayStyle,
         child: CNP<DefaultAssetPickerProvider>.value(
           value: provider,
-          builder: (BuildContext context, _) => Material(
-            color: theme.canvasColor,
-            child: Stack(
+          builder: (BuildContext context, _) => Scaffold(
+            backgroundColor: theme.scaffoldBackgroundColor,
+            body: Stack(
               fit: StackFit.expand,
               children: <Widget>[
                 if (isAppleOS(context))
                   appleOSLayout(context)
                 else
                   androidLayout(context),
-                if (Platform.isIOS) iOSPermissionOverlay(context),
+                permissionOverlay(context),
               ],
             ),
           ),

@@ -190,7 +190,7 @@ class _DirectoryFileAssetPickerState extends State<DirectoryFileAssetPicker> {
                 },
               );
               final List<File>? result =
-                  await Navigator.of(context).push<List<File>>(pageRoute);
+                  await Navigator.maybeOf(context)?.push<List<File>>(pageRoute);
               if (result != null && result != fileList) {
                 fileList
                   ..clear()
@@ -381,10 +381,11 @@ class FileAssetPickerBuilder
   @override
   Future<void> viewAsset(
     BuildContext context,
-    int index,
-    AssetEntity currentAsset,
+    int? index,
+    File currentAsset,
   ) async {
-    final List<File>? result = await Navigator.of(context).push<List<File>?>(
+    final List<File>? result =
+        await Navigator.maybeOf(context)?.push<List<File>?>(
       PageRouteBuilder<List<File>>(
         pageBuilder: (
           BuildContext context,
@@ -393,7 +394,8 @@ class FileAssetPickerBuilder
         ) {
           return AssetPickerViewer<File, Directory>(
             builder: FileAssetPickerViewerBuilderDelegate(
-              currentIndex: index,
+              currentIndex:
+                  index ?? provider.selectedAssets.indexOf(currentAsset),
               previewAssets: provider.selectedAssets,
               provider: FileAssetPickerViewerProvider(provider.selectedAssets),
               themeData: AssetPicker.themeData(themeColor),
@@ -405,7 +407,7 @@ class FileAssetPickerBuilder
       ),
     );
     if (result != null) {
-      Navigator.of(context).maybePop(result);
+      Navigator.maybeOf(context)?.maybePop(result);
     }
   }
 
@@ -415,7 +417,7 @@ class FileAssetPickerBuilder
     required List<File> previewAssets,
     List<File>? selectedAssets,
     FileAssetPickerProvider? selectorProvider,
-  }) {
+  }) async {
     final Widget viewer = AssetPickerViewer<File, Directory>(
       builder: FileAssetPickerViewerBuilderDelegate(
         currentIndex: index,
@@ -445,7 +447,7 @@ class FileAssetPickerBuilder
         return FadeTransition(opacity: animation, child: child);
       },
     );
-    return Navigator.of(context).push<List<File>?>(pageRoute);
+    return await Navigator.maybeOf(context)?.push<List<File>?>(pageRoute);
   }
 
   @override
@@ -483,8 +485,7 @@ class FileAssetPickerBuilder
                               child: Column(
                                 children: <Widget>[
                                   Expanded(child: assetsGridBuilder(context)),
-                                  if (!isAppleOS(context))
-                                    bottomActionBar(context),
+                                  bottomActionBar(context),
                                 ],
                               ),
                             ),
@@ -506,15 +507,11 @@ class FileAssetPickerBuilder
   PreferredSizeWidget appBar(BuildContext context) {
     final AppBar appBar = AppBar(
       backgroundColor: theme.appBarTheme.backgroundColor,
-      centerTitle: isAppleOS(context),
-      title: pathEntitySelector(context),
+      title: Semantics(
+        onTapHint: semanticsTextDelegate.sActionSwitchPathLabel,
+        child: pathEntitySelector(context),
+      ),
       leading: backButton(context),
-      actions: !isAppleOS(context)
-          ? <Widget>[
-              confirmButton(context),
-              const SizedBox(width: 14.0),
-            ]
-          : null,
     );
     appBarPreferredSize ??= appBar.preferredSize;
     return appBar;
@@ -539,11 +536,10 @@ class FileAssetPickerBuilder
                                 Positioned.fill(
                                   child: assetsGridBuilder(context),
                                 ),
-                                if (!isSingleAssetMode || isAppleOS(context))
-                                  PositionedDirectional(
-                                    bottom: 0.0,
-                                    child: bottomActionBar(context),
-                                  ),
+                                PositionedDirectional(
+                                  bottom: 0.0,
+                                  child: bottomActionBar(context),
+                                ),
                               ],
                             ),
                           ),
@@ -776,7 +772,7 @@ class FileAssetPickerBuilder
             ),
             onPressed: () {
               if (provider.isSelectedNotEmpty) {
-                Navigator.of(context).pop(provider.selectedAssets);
+                Navigator.maybeOf(context)?.pop(provider.selectedAssets);
               }
             },
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -1032,7 +1028,7 @@ class FileAssetPickerBuilder
                     selectorProvider: provider,
                   );
                   if (result != null) {
-                    Navigator.of(context).pop(result);
+                    Navigator.maybeOf(context)?.pop(result);
                   }
                 }
               : null,
@@ -1149,7 +1145,7 @@ class FileAssetPickerBuilder
                 previewAssets: provider.currentAssets,
               );
               if (result != null) {
-                Navigator.of(context).pop(result);
+                Navigator.maybeOf(context)?.pop(result);
               }
             },
             child: AnimatedContainer(
@@ -1192,7 +1188,7 @@ class FileAssetPickerBuilder
               fit: StackFit.expand,
               children: <Widget>[
                 if (isAppleOS(context)) appleOSLayout(c) else androidLayout(c),
-                if (Platform.isIOS) iOSPermissionOverlay(c),
+                permissionOverlay(c),
               ],
             ),
           ),
@@ -1386,24 +1382,51 @@ class FileAssetPickerViewerBuilderDelegate
         color: themeData.canvasColor.withOpacity(0.85),
         child: Row(
           children: <Widget>[
-            const BackButton(),
-            if (!isAppleOS(context))
-              StreamBuilder<int>(
-                initialData: currentIndex,
-                stream: pageStreamController.stream,
-                builder: (BuildContext _, AsyncSnapshot<int> snapshot) {
-                  return Text(
-                    '${snapshot.data! + 1}/${previewAssets.length}',
-                    style: const TextStyle(
-                      fontSize: 18.0,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  );
-                },
+            Expanded(
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: Semantics(
+                  sortKey: ordinalSortKey(0),
+                  child: IconButton(
+                    icon: const Icon(Icons.close),
+                    tooltip: MaterialLocalizations.of(
+                      context,
+                    ).backButtonTooltip,
+                    onPressed: Navigator.maybeOf(context)?.maybePop,
+                  ),
+                ),
               ),
-            const Spacer(),
-            if (isAppleOS(context) && provider != null) selectButton(context),
-            if (!isAppleOS(context) && provider != null) confirmButton(context),
+            ),
+            Expanded(
+              child: Center(
+                child: StreamBuilder<int>(
+                  initialData: currentIndex,
+                  stream: pageStreamController.stream,
+                  builder: (BuildContext _, AsyncSnapshot<int> snapshot) {
+                    return Text(
+                      '${snapshot.requireData + 1}/${previewAssets.length}',
+                      style: const TextStyle(
+                        fontSize: 18.0,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            if (provider != null)
+              Expanded(
+                child: Container(
+                  alignment: AlignmentDirectional.centerEnd,
+                  padding: const EdgeInsetsDirectional.only(end: 14),
+                  child: Semantics(
+                    sortKey: ordinalSortKey(0.2),
+                    child: selectButton(context),
+                  ),
+                ),
+              )
+            else
+              const Spacer(),
           ],
         ),
       ),
@@ -1467,7 +1490,8 @@ class FileAssetPickerViewerBuilderDelegate
             ),
             onPressed: () {
               if (provider.isSelectedNotEmpty) {
-                Navigator.of(context).pop(provider.currentlySelectedAssets);
+                Navigator.maybeOf(context)
+                    ?.pop(provider.currentlySelectedAssets);
               }
             },
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,

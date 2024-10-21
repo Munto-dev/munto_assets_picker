@@ -44,8 +44,7 @@ Widget defaultPickerTestApp({
 }
 
 class _DefaultHomePage extends StatelessWidget {
-  // ignore: unused_element
-  const _DefaultHomePage(this.onButtonPressed, {super.key});
+  const _DefaultHomePage(this.onButtonPressed);
 
   final void Function(BuildContext)? onButtonPressed;
 
@@ -54,7 +53,9 @@ class _DefaultHomePage extends StatelessWidget {
     return Scaffold(
       body: Center(
         child: TextButton(
-          onPressed: () => onButtonPressed?.call(context),
+          onPressed: () {
+            onButtonPressed?.call(context);
+          },
           child: const Text(_testButtonText),
         ),
       ),
@@ -73,7 +74,9 @@ class TestPhotoManagerPlugin extends PhotoManagerPlugin {
 
 class TestAssetPickerDelegate extends AssetPickerDelegate {
   @override
-  Future<PermissionState> permissionCheck() async {
+  Future<PermissionState> permissionCheck({
+    PermissionRequestOption requestOption = const PermissionRequestOption(),
+  }) async {
     return SynchronousFuture<PermissionState>(PermissionState.authorized);
   }
 
@@ -82,10 +85,19 @@ class TestAssetPickerDelegate extends AssetPickerDelegate {
     BuildContext context, {
     Key? key,
     AssetPickerConfig pickerConfig = const AssetPickerConfig(),
+    PermissionRequestOption? permissionRequestOption,
     bool useRootNavigator = true,
     AssetPickerPageRouteBuilder<List<AssetEntity>>? pageRouteBuilder,
   }) async {
-    final PermissionState ps = await permissionCheck();
+    permissionRequestOption ??= PermissionRequestOption(
+      androidPermission: AndroidPermission(
+        type: pickerConfig.requestType,
+        mediaLocation: false,
+      ),
+    );
+    final PermissionState ps = await permissionCheck(
+      requestOption: permissionRequestOption,
+    );
     final AssetPathEntity pathEntity = AssetPathEntity(
       id: 'test',
       name: 'pathEntity',
@@ -110,6 +122,7 @@ class TestAssetPickerDelegate extends AssetPickerDelegate {
       ..totalAssetsCount = 1;
     final Widget picker = AssetPicker<AssetEntity, AssetPathEntity>(
       key: key,
+      permissionRequestOption: permissionRequestOption,
       builder: DefaultAssetPickerBuilderDelegate(
         provider: provider,
         initialPermission: ps,
@@ -129,6 +142,7 @@ class TestAssetPickerDelegate extends AssetPickerDelegate {
         textDelegate: pickerConfig.textDelegate,
         themeColor: pickerConfig.themeColor,
         locale: Localizations.maybeLocaleOf(context),
+        shouldAutoplayPreview: pickerConfig.shouldAutoplayPreview,
       ),
     );
     final List<AssetEntity>? result = await Navigator.of(

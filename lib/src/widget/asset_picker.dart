@@ -2,9 +2,13 @@
 // Use of this source code is governed by an Apache license that can be found
 // in the LICENSE file.
 
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'package:wechat_picker_library/wechat_picker_library.dart';
 
 import '../constants/config.dart';
 import '../delegates/asset_picker_builder_delegate.dart';
@@ -15,8 +19,13 @@ import 'asset_picker_page_route.dart';
 AssetPickerDelegate _pickerDelegate = const AssetPickerDelegate();
 
 class AssetPicker<Asset, Path> extends StatefulWidget {
-  const AssetPicker({super.key, required this.builder});
+  const AssetPicker({
+    super.key,
+    required this.permissionRequestOption,
+    required this.builder,
+  });
 
+  final PermissionRequestOption permissionRequestOption;
   final AssetPickerBuilderDelegate<Asset, Path> builder;
 
   /// Provide another [AssetPickerDelegate] which override with
@@ -31,14 +40,17 @@ class AssetPicker<Asset, Path> extends StatefulWidget {
   }
 
   /// {@macro wechat_assets_picker.delegates.AssetPickerDelegate.permissionCheck}
-  static Future<PermissionState> permissionCheck() {
-    return _pickerDelegate.permissionCheck();
+  static Future<PermissionState> permissionCheck({
+    PermissionRequestOption requestOption = const PermissionRequestOption(),
+  }) {
+    return _pickerDelegate.permissionCheck(requestOption: requestOption);
   }
 
   /// {@macro wechat_assets_picker.delegates.AssetPickerDelegate.pickAssets}
   static Future<List<AssetEntity>?> pickAssets(
     BuildContext context, {
     Key? key,
+    PermissionRequestOption? permissionRequestOption,
     AssetPickerConfig pickerConfig = const AssetPickerConfig(),
     bool useRootNavigator = true,
     AssetPickerPageRouteBuilder<List<AssetEntity>>? pageRouteBuilder,
@@ -47,6 +59,7 @@ class AssetPicker<Asset, Path> extends StatefulWidget {
       context,
       key: key,
       pickerConfig: pickerConfig,
+      permissionRequestOption: permissionRequestOption,
       useRootNavigator: useRootNavigator,
       pageRouteBuilder: pageRouteBuilder,
     );
@@ -56,15 +69,18 @@ class AssetPicker<Asset, Path> extends StatefulWidget {
   static Future<List<Asset>?> pickAssetsWithDelegate<Asset, Path,
       PickerProvider extends AssetPickerProvider<Asset, Path>>(
     BuildContext context, {
-    Key? key,
     required AssetPickerBuilderDelegate<Asset, Path> delegate,
-    bool useRootNavigator = true,
+    PermissionRequestOption permissionRequestOption =
+        const PermissionRequestOption(),
+    Key? key,
     AssetPickerPageRouteBuilder<List<Asset>>? pageRouteBuilder,
+    bool useRootNavigator = true,
   }) {
     return _pickerDelegate.pickAssetsWithDelegate<Asset, Path, PickerProvider>(
       context,
       key: key,
       delegate: delegate,
+      permissionRequestOption: permissionRequestOption,
       useRootNavigator: useRootNavigator,
       pageRouteBuilder: pageRouteBuilder,
     );
@@ -92,11 +108,13 @@ class AssetPicker<Asset, Path> extends StatefulWidget {
 
 class AssetPickerState<Asset, Path> extends State<AssetPicker<Asset, Path>>
     with TickerProviderStateMixin, WidgetsBindingObserver {
+  Completer<PermissionState>? permissionStateLock;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    AssetPicker.registerObserve(_onLimitedAssetsUpdated);
+    AssetPicker.registerObserve(_onAssetsUpdated);
     widget.builder.initState(this);
   }
 
@@ -104,27 +122,47 @@ class AssetPickerState<Asset, Path> extends State<AssetPicker<Asset, Path>>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
-      PhotoManager.requestPermissionExtend().then(
-        (PermissionState ps) => widget.builder.permission.value = ps,
-      );
+      requestPermission().then((ps) {
+        if (!mounted) {
+          return;
+        }
+        widget.builder.permissionNotifier.value = ps;
+        if (ps == PermissionState.limited && Platform.isAndroid) {
+          _onAssetsUpdated(const MethodCall(''));
+        }
+      });
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    AssetPicker.unregisterObserve(_onLimitedAssetsUpdated);
+    AssetPicker.unregisterObserve(_onAssetsUpdated);
     widget.builder.dispose();
     super.dispose();
   }
 
-  Future<void> _onLimitedAssetsUpdated(MethodCall call) {
+  Future<void> _onAssetsUpdated(MethodCall call) {
     return widget.builder.onAssetsChanged(call, (VoidCallback fn) {
       fn();
-      if (mounted) {
-        setState(() {});
-      }
+      safeSetState(() {});
     });
+  }
+
+  Future<PermissionState> requestPermission() {
+    if (permissionStateLock != null) {
+      return permissionStateLock!.future;
+    }
+    final lock = Completer<PermissionState>();
+    permissionStateLock = lock;
+    Future(
+      () => PhotoManager.requestPermissionExtend(
+        requestOption: widget.permissionRequestOption,
+      ),
+    ).then(lock.complete).catchError(lock.completeError).whenComplete(() {
+      permissionStateLock = null;
+    });
+    return lock.future;
   }
 
   @override

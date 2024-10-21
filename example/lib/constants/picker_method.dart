@@ -96,6 +96,29 @@ class PickMethod {
     );
   }
 
+  factory PickMethod.livePhoto(BuildContext context, int maxAssetsCount) {
+    return PickMethod(
+      icon: '🎬',
+      name: context.l10n.pickMethodLivePhotoName,
+      description: context.l10n.pickMethodLivePhotoDescription,
+      method: (BuildContext context, List<AssetEntity> assets) {
+        return AssetPicker.pickAssets(
+          context,
+          pickerConfig: AssetPickerConfig(
+            maxAssets: maxAssetsCount,
+            selectedAssets: assets,
+            requestType: RequestType.image,
+            filterOptions: CustomFilter.sql(
+              where: '${CustomColumns.base.mediaType} = 1'
+                  ' AND '
+                  '${CustomColumns.darwin.mediaSubtypes} & (1 << 3) = (1 << 3)',
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   factory PickMethod.camera({
     required BuildContext context,
     required int maxAssetsCount,
@@ -134,8 +157,13 @@ class PickMethod {
                       handleResult(context, result);
                     }
                   },
-                  child: const Center(
-                    child: Icon(Icons.camera_enhance, size: 42.0),
+                  child: Container(
+                    padding: const EdgeInsets.all(28.0),
+                    color: Theme.of(context).dividerColor,
+                    child: const FittedBox(
+                      fit: BoxFit.fill,
+                      child: Icon(Icons.camera_enhance),
+                    ),
                   ),
                 ),
               );
@@ -178,11 +206,11 @@ class PickMethod {
                     if (result == null) {
                       return;
                     }
-                    final AssetPicker<AssetEntity, AssetPathEntity> picker =
-                        context.findAncestorWidgetOfExactType()!;
-                    final DefaultAssetPickerBuilderDelegate builder =
+                    final picker = context.findAncestorWidgetOfExactType<
+                        AssetPicker<AssetEntity, AssetPathEntity>>()!;
+                    final builder =
                         picker.builder as DefaultAssetPickerBuilderDelegate;
-                    final DefaultAssetPickerProvider p = builder.provider;
+                    final p = builder.provider;
                     await p.switchPath(
                       PathWrapper<AssetPathEntity>(
                         path:
@@ -191,8 +219,13 @@ class PickMethod {
                     );
                     p.selectAsset(result);
                   },
-                  child: const Center(
-                    child: Icon(Icons.camera_enhance, size: 42.0),
+                  child: Container(
+                    padding: const EdgeInsets.all(28.0),
+                    color: Theme.of(context).dividerColor,
+                    child: const FittedBox(
+                      fit: BoxFit.fill,
+                      child: Icon(Icons.camera_enhance),
+                    ),
                   ),
                 ),
               );

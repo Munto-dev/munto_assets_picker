@@ -12,7 +12,7 @@ import 'package:provider/provider.dart';
 
 import '../constants/constants.dart';
 import '../delegates/sort_path_delegate.dart';
-import '../internal/singleton.dart';
+import '../internals/singleton.dart';
 import '../models/path_wrapper.dart';
 
 /// Helps the assets picker to manage [Path]s and [Asset]s.
@@ -121,9 +121,19 @@ abstract class AssetPickerProvider<Asset, Path> extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool? _hasMoreToLoad;
+
   /// Whether more assets are waiting for a load.
   /// 是否还有更多资源可以加载
-  bool get hasMoreToLoad => _currentAssets.length < _totalAssetsCount!;
+  bool get hasMoreToLoad {
+    if (_hasMoreToLoad case final bool value) {
+      return value;
+    }
+    if (_totalAssetsCount case final int count) {
+      return _currentAssets.length < count;
+    }
+    return true;
+  }
 
   /// The current page for assets list.
   /// 当前加载的资源列表分页数
@@ -264,8 +274,8 @@ class DefaultAssetPickerProvider
     Singleton.sortPathDelegate = sortPathDelegate ?? SortPathDelegate.common;
     // Call [getAssetList] with route duration when constructing.
     Future<void>.delayed(initializeDelayDuration, () async {
-      await getPaths();
-      await getAssetsFromCurrentPath();
+      await getPaths(onlyAll: true);
+      await getPaths(onlyAll: false);
     });
   }
 
@@ -319,17 +329,23 @@ class DefaultAssetPickerProvider
   }
 
   @override
-  Future<void> getPaths() async {
+  Future<void> getPaths({
+    bool onlyAll = false,
+    bool keepPreviousCount = false,
+  }) async {
     final PMFilter options;
-    final PMFilter? fog = filterOptions;
-    if (fog is FilterOptionGroup?) {
-      // Initial base options.
-      // Enable need title for audios to get proper display.
-      final FilterOptionGroup newOptions = FilterOptionGroup(
+    final fog = filterOptions;
+    if (fog == null) {
+      options = AdvancedCustomFilter(
+        orderBy: [OrderByItem.desc(CustomColumns.base.createDate)],
+      );
+    } else if (fog is FilterOptionGroup) {
+      final newOptions = FilterOptionGroup(
         imageOption: const FilterOption(
           sizeConstraint: SizeConstraint(ignoreSize: true),
         ),
         audioOption: const FilterOption(
+          // Enable title for audios to get proper display.
           needTitle: true,
           sizeConstraint: SizeConstraint(ignoreSize: true),
         ),
@@ -337,33 +353,45 @@ class DefaultAssetPickerProvider
         createTimeCond: DateTimeCond.def().copyWith(ignore: true),
         updateTimeCond: DateTimeCond.def().copyWith(ignore: true),
       );
-      // Merge user's filter options into base options if it's not null.
-      if (fog != null) {
-        newOptions.merge(fog);
-      }
+      newOptions.merge(fog);
       options = newOptions;
     } else {
       options = fog;
     }
 
-    final List<AssetPathEntity> list = await PhotoManager.getAssetPathList(
+    final list = await PhotoManager.getAssetPathList(
       type: requestType,
       filterOption: options,
+      onlyAll: onlyAll,
     );
 
-    _paths = list
-        .map((AssetPathEntity p) => PathWrapper<AssetPathEntity>(path: p))
-        .toList();
+    _paths = list.map((p) {
+      final int? assetCount;
+      if (keepPreviousCount) {
+        assetCount =
+            _paths.where((e) => e.path.id == p.id).firstOrNull?.assetCount;
+      } else {
+        assetCount = null;
+      }
+      return PathWrapper<AssetPathEntity>(path: p, assetCount: assetCount);
+    }).toList();
     // Sort path using sort path delegate.
     Singleton.sortPathDelegate.sort(_paths);
-    // Use sync method to avoid unnecessary wait.
-    _paths
-      ..forEach(getAssetCountFromPath)
-      ..forEach(getThumbnailFromPath);
+    // Populate fields to paths without awaiting.
+    for (final path in _paths) {
+      Future(() async {
+        await getAssetCountFromPath(path);
+        await getThumbnailFromPath(path);
+      });
+    }
 
     // Set first path entity as current path entity.
     if (_paths.isNotEmpty) {
       _currentPath ??= _paths.first;
+    }
+
+    if (onlyAll) {
+      await getAssetsFromCurrentPath();
     }
   }
 
@@ -372,26 +400,31 @@ class DefaultAssetPickerProvider
   @override
   Future<void> getAssetsFromPath([int? page, AssetPathEntity? path]) {
     Future<void> run() async {
-      final int currentPage = page ?? currentAssetsListPage;
-      final AssetPathEntity currentPath = path ?? this.currentPath!.path;
-      final List<AssetEntity> list = await currentPath.getAssetListPaged(
+      final currentPage = page ?? currentAssetsListPage;
+      final currentPath = path ?? this.currentPath!.path;
+      final list = await currentPath.getAssetListPaged(
         page: currentPage,
         size: pageSize,
       );
       if (currentPage == 0) {
         _currentAssets.clear();
+        _hasMoreToLoad = null;
+      } else if (list.isEmpty) {
+        _hasMoreToLoad = false;
       }
       _currentAssets.addAll(list);
       _hasAssetsToDisplay = _currentAssets.isNotEmpty;
+      _isAssetsEmpty = _currentAssets.isEmpty;
       notifyListeners();
     }
 
     if (_getAssetsFromPathCompleter == null) {
-      _getAssetsFromPathCompleter = Completer<void>();
-      run().then((_) {
-        _getAssetsFromPathCompleter!.complete();
+      final completer = Completer<void>();
+      _getAssetsFromPathCompleter = completer;
+      run().then((r) {
+        completer.complete();
       }).catchError((Object e, StackTrace s) {
-        _getAssetsFromPathCompleter!.completeError(e, s);
+        completer.completeError(e, s);
       }).whenComplete(() {
         _getAssetsFromPathCompleter = null;
       });
@@ -461,7 +494,10 @@ class DefaultAssetPickerProvider
         (PathWrapper<AssetPathEntity> p) => p.path == path.path,
       );
       if (index != -1) {
-        _paths[index] = _paths[index].copyWith(thumbnailData: data);
+        _paths[index] = _paths[index].copyWith(
+          assetCount: assetCount,
+          thumbnailData: data,
+        );
         notifyListeners();
       }
       return data;
@@ -495,21 +531,15 @@ class DefaultAssetPickerProvider
   /// Get assets list from current path entity.
   /// 从当前已选路径获取资源列表
   Future<void> getAssetsFromCurrentPath() async {
-    if (_currentPath == null || _paths.isEmpty) {
+    if (_paths.isEmpty && _currentPath != null) {
+      throw StateError('The current path is not synced with the empty paths.');
+    }
+    if (_paths.isNotEmpty && _currentPath == null) {
+      throw StateError('The empty path is not synced with the current paths.');
+    }
+    if (_paths.isEmpty || _currentPath == null) {
       isAssetsEmpty = true;
       return;
-    }
-    final PathWrapper<AssetPathEntity> wrapper = _currentPath!;
-    final int assetCount =
-        wrapper.assetCount ?? await wrapper.path.assetCountAsync;
-    // If the picker was disposed (#492), stop fetching the assets
-    if (!mounted) {
-      return;
-    }
-    totalAssetsCount = assetCount;
-    isAssetsEmpty = assetCount == 0;
-    if (wrapper.assetCount == null) {
-      currentPath = _currentPath!.copyWith(assetCount: assetCount);
     }
     await getAssetsFromPath(0, currentPath!.path);
   }

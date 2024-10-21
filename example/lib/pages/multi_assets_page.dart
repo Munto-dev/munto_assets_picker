@@ -2,6 +2,8 @@
 // Use of this source code is governed by an Apache license that can be found
 // in the LICENSE file.
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:munto_assets_picker/munto_assets_picker.dart';
 
@@ -32,11 +34,13 @@ class _MultiAssetsPageState extends State<MultiAssetsPage>
       PickMethod.image(context, maxAssetsCount),
       PickMethod.video(context, maxAssetsCount),
       PickMethod.audio(context, maxAssetsCount),
+      if (Platform.isIOS || Platform.isMacOS)
+        PickMethod.livePhoto(context, maxAssetsCount),
       PickMethod.camera(
         context: context,
         maxAssetsCount: maxAssetsCount,
         handleResult: (BuildContext context, AssetEntity result) =>
-            Navigator.of(context).pop(<AssetEntity>[...assets, result]),
+            Navigator.maybeOf(context)?.pop(<AssetEntity>[...assets, result]),
       ),
       PickMethod.cameraAndStay(context, maxAssetsCount),
       PickMethod.changeLanguages(context, maxAssetsCount),
