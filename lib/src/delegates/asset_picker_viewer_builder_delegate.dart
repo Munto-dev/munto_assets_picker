@@ -735,10 +735,10 @@ class DefaultAssetPickerViewerBuilderDelegate
           onPressed: () {
             Navigator.maybeOf(context)?.maybePop();
           },
-          tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
           icon: Icon(
-            Icons.close,
-            semanticLabel: MaterialLocalizations.of(context).closeButtonTooltip,
+            Icons.arrow_back_ios_new,
+            semanticLabel: MaterialLocalizations.of(context).backButtonTooltip,
           ),
         ),
       ),
@@ -1019,9 +1019,9 @@ class DefaultAssetPickerViewerBuilderDelegate
             (themeData.effectiveBrightness.isDark
                 ? SystemUiOverlayStyle.light
                 : SystemUiOverlayStyle.dark),
-        child: Material(
-          color: themeData.scaffoldBackgroundColor,
-          child: Stack(
+        child: Scaffold(
+          resizeToAvoidBottomInset: false,
+          body: Stack(
             children: <Widget>[
               Positioned.fill(child: _pageViewBuilder(context)),
               if (isWeChatMoment && hasVideo) ...<Widget>[

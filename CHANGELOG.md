@@ -11,6 +11,47 @@ that can be found in the LICENSE file. -->
 
 *None.*
 
+## 9.3.3
+
+### Fixes
+
+- Recovers the compatibility with Flutter 3.16.
+
+## 9.3.2
+
+### Improvements
+
+- Adapt the file type getter from the image provider to get a precise file type in grid.
+- Adds the identifier for grid item's semantics.
+- Improves preview page back button.
+
+## 9.3.1
+
+### Improvements
+
+- Do not mute the Live Photo during the preview.
+
+### Fixes
+
+- Fix the GIF indicator's layout.
+- Fix the directionality with the reverted grid item.
+
+## 9.3.0
+
+### New features
+
+- Add explicit Live Photos indicator for assets.
+
+### Improvements
+
+- Make Live Photos gesture consistent when scaling and panning.
+- Integrate `LocallyAvailableBuilder` with thumbnail options to improve the thumbnail loading speed.
+- Use `visibility_detector` and scroll observer to improve media playing experiences.
+
+### Fixes
+
+- Fix the bottom actions bar display conditions.
+
 ## 9.2.2
 
 - Uses correct `isOriginal` for the `LocallyAvailableBuilder`.
@@ -25,8 +66,8 @@ that can be found in the LICENSE file. -->
 ### New features
 
 - Introduce `AssetsChangeCallback` and `AssetsChangeRefreshPredicate`
-  to help users act according to assets changes.
-- Add `shouldAutoplayPreview` in the config.
+  to help users act according to asset changes.
+- Add `shouldAutoplayPreview` to the picker config.
 
 ### Fixes
 

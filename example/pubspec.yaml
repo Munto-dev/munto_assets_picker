@@ -1,6 +1,6 @@
 name: wechat_assets_picker_demo
 description: The demo project for the wechat_assets_picker package.
-version: 9.2.1+57
+version: 9.3.3+61
 publish_to: none
 
 environment:
@@ -20,7 +20,7 @@ dependencies:
     git :
       url : https://github.com/Munto-dev/muntorial.git
 
-  extended_image: ^8.2.1
+  extended_image: ^8.3.1
   package_info_plus: '>=5.0.0 <9.0.0'
   path: ^1.8.0
   path_provider: ^2.0.15

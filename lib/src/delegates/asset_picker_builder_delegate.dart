@@ -407,16 +407,19 @@ abstract class AssetPickerBuilderDelegate<Asset, Path> {
   /// GIF image type indicator.
   /// GIF 类型图片指示
   Widget gifIndicator(BuildContext context, Asset asset) {
-    return Positioned.fill(
-      top: null,
+    return Align(
+      alignment: Alignment.bottomCenter,
       child: Container(
-        alignment: AlignmentDirectional.centerEnd,
+        width: double.infinity,
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: AlignmentDirectional.bottomCenter,
             end: AlignmentDirectional.topCenter,
-            colors: <Color>[theme.dividerColor, Colors.transparent],
+            colors: <Color>[
+              theme.canvasColor.withAlpha(128),
+              Colors.transparent,
+            ],
           ),
         ),
         child: Container(
@@ -430,15 +433,41 @@ abstract class AssetPickerBuilderDelegate<Asset, Path> {
           child: ScaleText(
             textDelegate.gifIndicator,
             style: TextStyle(
-              color: isAppleOS(context)
-                  ? theme.textTheme.bodyMedium?.color
-                  : theme.primaryColor,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
+              color: theme.textTheme.bodyMedium?.color,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
             ),
             semanticsLabel: semanticsTextDelegate.gifIndicator,
             strutStyle: const StrutStyle(forceStrutHeight: true, height: 1),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget buildLivePhotoIndicator(BuildContext context, Asset asset) {
+    return Align(
+      alignment: AlignmentDirectional.bottomCenter,
+      child: Container(
+        width: double.maxFinite,
+        height: 26,
+        alignment: AlignmentDirectional.bottomStart,
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: AlignmentDirectional.bottomCenter,
+            end: AlignmentDirectional.topCenter,
+            colors: <Color>[
+              theme.canvasColor.withAlpha(80),
+              Colors.transparent,
+            ],
+          ),
+        ),
+        child: Image.asset(
+          'assets/icon/indicator-live-photos.png',
+          package: packageName,
+          gaplessPlayback: true,
+          color: Colors.white,
         ),
       ),
     );
@@ -538,35 +567,44 @@ abstract class AssetPickerBuilderDelegate<Asset, Path> {
   /// Action bar widget aligned to bottom.
   /// 底部操作栏部件
   Widget bottomActionBar(BuildContext context) {
-    Widget child = Container(
-      height: bottomActionBarHeight + context.bottomPadding,
-      padding: const EdgeInsets.symmetric(horizontal: 20).copyWith(
-        bottom: context.bottomPadding,
+    final children = <Widget>[
+      if (isPermissionLimited) accessLimitedBottomTip(context),
+      Container(
+        height: bottomActionBarHeight + context.bottomPadding,
+        padding: const EdgeInsets.symmetric(horizontal: 20).copyWith(
+          bottom: context.bottomPadding,
+        ),
+        color: theme.bottomAppBarTheme.color?.withOpacity(
+          theme.bottomAppBarTheme.color!.opacity *
+              (isAppleOS(context) ? .9 : 1),
+        ),
+        child: Row(
+          children: <Widget>[
+            previewButton(context),
+            if (!isSingleAssetMode) const Spacer(),
+            if (!isSingleAssetMode) confirmButton(context),
+          ],
+        ),
       ),
-      color: theme.primaryColor.withOpacity(isAppleOS(context) ? 0.90 : 1),
-      child: Row(
-        children: <Widget>[
-          previewButton(context),
-          const Spacer(),
-          confirmButton(context),
-        ],
-      ),
+    ];
+    if (children.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    Widget child = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: children,
     );
-    if (isPermissionLimited) {
-      child = Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[accessLimitedBottomTip(context), child],
+    if (isAppleOS(context)) {
+      child = ClipRect(
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(
+            sigmaX: appleOSBlurRadius,
+            sigmaY: appleOSBlurRadius,
+          ),
+          child: child,
+        ),
       );
     }
-    child = ClipRect(
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(
-          sigmaX: appleOSBlurRadius,
-          sigmaY: appleOSBlurRadius,
-        ),
-        child: child,
-      ),
-    );
     return child;
   }
 
@@ -822,6 +860,9 @@ class DefaultAssetPickerBuilderDelegate
 
   @override
   bool get isSingleAssetMode => provider.maxAssets == 1;
+
+  /// Whether the bottom actions bar should display.
+  bool get hasBottomActions => isPreviewEnabled || !isSingleAssetMode;
 
   /// The listener to track the scroll position of the [gridScrollController]
   /// if [keepScrollOffset] is true.
@@ -1109,8 +1150,7 @@ class DefaultAssetPickerBuilderDelegate
                         child: Column(
                           children: <Widget>[
                             Expanded(child: assetsGridBuilder(context)),
-                            if (isPreviewEnabled || !isSingleAssetMode)
-                              bottomActionBar(context),
+                            bottomActionBar(context),
                           ],
                         ),
                       ),
@@ -1136,8 +1176,7 @@ class DefaultAssetPickerBuilderDelegate
             child: Stack(
               children: <Widget>[
                 Positioned.fill(child: assetsGridBuilder(context)),
-                if (isPreviewEnabled || !isSingleAssetMode)
-                  Positioned.fill(top: null, child: bottomActionBar(context)),
+                Positioned.fill(top: null, child: bottomActionBar(context)),
               ],
             ),
           ),
@@ -1212,11 +1251,7 @@ class DefaultAssetPickerBuilderDelegate
     final bool gridRevert = effectiveShouldRevertGrid(context);
     return Selector<DefaultAssetPickerProvider, PathWrapper<AssetPathEntity>?>(
       selector: (_, DefaultAssetPickerProvider p) => p.currentPath,
-      builder: (
-        BuildContext context,
-        PathWrapper<AssetPathEntity>? wrapper,
-        _,
-      ) {
+      builder: (context, wrapper, _) {
         // First, we need the count of the assets.
         int totalCount = wrapper?.assetCount ?? 0;
         final Widget? specialItem;
@@ -1255,30 +1290,29 @@ class DefaultAssetPickerBuilderDelegate
         final double topPadding =
             context.topPadding + appBarPreferredSize!.height;
 
+        final textDirection = Directionality.of(context);
         Widget sliverGrid(BuildContext context, List<AssetEntity> assets) {
           return SliverGrid(
             delegate: SliverChildBuilderDelegate(
-              (_, int index) => Builder(
-                builder: (BuildContext context) {
-                  if (gridRevert) {
-                    if (index < placeholderCount) {
-                      return const SizedBox.shrink();
-                    }
-                    index -= placeholderCount;
+              (context, int index) {
+                if (gridRevert) {
+                  if (index < placeholderCount) {
+                    return const SizedBox.shrink();
                   }
-                  return MergeSemantics(
-                    child: Directionality(
-                      textDirection: Directionality.of(context),
-                      child: assetGridItemBuilder(
-                        context,
-                        index,
-                        assets,
-                        specialItem: specialItem,
-                      ),
+                  index -= placeholderCount;
+                }
+                return MergeSemantics(
+                  child: Directionality(
+                    textDirection: textDirection,
+                    child: assetGridItemBuilder(
+                      context,
+                      index,
+                      assets,
+                      specialItem: specialItem,
                     ),
-                  );
-                },
-              ),
+                  ),
+                );
+              },
               childCount: assetsGridItemCount(
                 context: context,
                 assets: assets,
@@ -1489,6 +1523,7 @@ class DefaultAssetPickerBuilderDelegate
               hint += ', ${asset.title}';
             }
             return Semantics(
+              key: ValueKey('${asset.id}-semantics'),
               button: false,
               enabled: !isBanned,
               excludeSemantics: true,
@@ -1715,32 +1750,36 @@ class DefaultAssetPickerBuilderDelegate
     return LocallyAvailableBuilder(
       asset: asset,
       isOriginal: false,
+      withSubtype: false,
+      thumbnailOption: ThumbnailOption(size: gridThumbnailSize),
       builder: (context, asset) {
         final imageProvider = AssetEntityImageProvider(
           asset,
           isOriginal: false,
           thumbnailSize: gridThumbnailSize,
         );
-        SpecialImageType? type;
-        if (imageProvider.imageFileType == ImageFileType.gif) {
-          type = SpecialImageType.gif;
-        } else if (imageProvider.imageFileType == ImageFileType.heic) {
-          type = SpecialImageType.heic;
-        }
         return Stack(
+          fit: StackFit.expand,
           children: <Widget>[
-            Positioned.fill(
-              child: RepaintBoundary(
-                child: AssetEntityGridItemBuilder(
-                  image: imageProvider,
-                  failedItemBuilder: failedItemBuilder,
-                ),
+            RepaintBoundary(
+              child: AssetEntityGridItemBuilder(
+                image: imageProvider,
+                failedItemBuilder: failedItemBuilder,
               ),
             ),
-            if (type == SpecialImageType.gif) // 如果为GIF则显示标识
-              gifIndicator(context, asset),
+            FutureBuilder(
+              future: imageProvider.imageFileType,
+              builder: (context, snapshot) {
+                if (snapshot.data case final type?
+                    when type == ImageFileType.gif) {
+                  return gifIndicator(context, asset);
+                }
+                return const SizedBox.shrink();
+              },
+            ),
             if (asset.type == AssetType.video) // 如果为视频则显示标识
               videoIndicator(context, asset),
+            if (asset.isLivePhoto) buildLivePhotoIndicator(context, asset),
           ],
         );
       },
@@ -2282,10 +2321,8 @@ class DefaultAssetPickerBuilderDelegate
   /// 将指示器的图标和文字设置为 [Colors.white]。
   @override
   Widget videoIndicator(BuildContext context, AssetEntity asset) {
-    return PositionedDirectional(
-      start: 0,
-      end: 0,
-      bottom: 0,
+    return Align(
+      alignment: Alignment.bottomCenter,
       child: Container(
         width: double.maxFinite,
         height: 26,
@@ -2328,29 +2365,81 @@ class DefaultAssetPickerBuilderDelegate
   }
 
   @override
-  Widget bottomActionBar(BuildContext context) {
-    Widget child = Container(
-      height: bottomActionBarHeight + context.bottomPadding,
-      padding: const EdgeInsets.symmetric(horizontal: 20).copyWith(
-        bottom: context.bottomPadding,
-      ),
-      color: theme.bottomAppBarTheme.color?.withOpacity(
-        theme.bottomAppBarTheme.color!.opacity * (isAppleOS(context) ? .9 : 1),
-      ),
-      child: Row(
-        children: <Widget>[
-          if (isPreviewEnabled) previewButton(context),
-          if (isPreviewEnabled || !isSingleAssetMode) const Spacer(),
-          if (isPreviewEnabled || !isSingleAssetMode) confirmButton(context),
-        ],
+  Widget accessLimitedBottomTip(BuildContext context) {
+    final double bottomPadding;
+    if (hasBottomActions) {
+      bottomPadding = 0;
+    } else {
+      bottomPadding = MediaQuery.paddingOf(context).bottom;
+    }
+    return GestureDetector(
+      onTap: () {
+        Feedback.forTap(context);
+        PhotoManager.openSetting();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10)
+            .add(EdgeInsets.only(bottom: bottomPadding)),
+        height: permissionLimitedBarHeight + bottomPadding,
+        color: theme.primaryColor.withOpacity(isAppleOS(context) ? 0.90 : 1),
+        child: Row(
+          children: <Widget>[
+            const SizedBox(width: 5),
+            Icon(
+              Icons.warning,
+              color: Colors.orange[400]!.withOpacity(.8),
+            ),
+            const SizedBox(width: 15),
+            Expanded(
+              child: ScaleText(
+                textDelegate.accessAllTip,
+                style: context.textTheme.bodySmall?.copyWith(
+                  fontSize: 14,
+                ),
+                semanticsLabel: semanticsTextDelegate.accessAllTip,
+              ),
+            ),
+            Icon(
+              Icons.keyboard_arrow_right,
+              color: context.iconTheme.color?.withOpacity(.5),
+            ),
+          ],
+        ),
       ),
     );
-    if (isPermissionLimited) {
-      child = Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[accessLimitedBottomTip(context), child],
-      );
+  }
+
+  @override
+  Widget bottomActionBar(BuildContext context) {
+    final children = <Widget>[
+      if (isPermissionLimited) accessLimitedBottomTip(context),
+      if (hasBottomActions)
+        Container(
+          height: bottomActionBarHeight + context.bottomPadding,
+          padding: const EdgeInsets.symmetric(horizontal: 20).copyWith(
+            bottom: context.bottomPadding,
+          ),
+          color: theme.bottomAppBarTheme.color?.withOpacity(
+            theme.bottomAppBarTheme.color!.opacity *
+                (isAppleOS(context) ? .9 : 1),
+          ),
+          child: Row(
+            children: <Widget>[
+              if (isPreviewEnabled) previewButton(context),
+              if (isPreviewEnabled || !isSingleAssetMode) const Spacer(),
+              if (isPreviewEnabled || !isSingleAssetMode)
+                confirmButton(context),
+            ],
+          ),
+        ),
+    ];
+    if (children.isEmpty) {
+      return const SizedBox.shrink();
     }
+    Widget child = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: children,
+    );
     if (isAppleOS(context)) {
       child = ClipRect(
         child: BackdropFilter(
@@ -2377,15 +2466,15 @@ class DefaultAssetPickerBuilderDelegate
         }
       });
     }
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: overlayStyle,
-      child: Theme(
-        data: theme,
+    return Theme(
+      data: theme,
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: overlayStyle,
         child: CNP<DefaultAssetPickerProvider>.value(
           value: provider,
-          builder: (BuildContext context, _) => Material(
-            color: theme.canvasColor,
-            child: Stack(
+          builder: (BuildContext context, _) => Scaffold(
+            backgroundColor: theme.scaffoldBackgroundColor,
+            body: Stack(
               fit: StackFit.expand,
               children: <Widget>[
                 if (isAppleOS(context))
