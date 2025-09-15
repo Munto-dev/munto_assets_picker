@@ -6,7 +6,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:extended_image/extended_image.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Path;
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:photo_manager/photo_manager.dart';
@@ -273,7 +273,7 @@ abstract class AssetPickerViewerBuilderDelegate<Asset, Path> {
   }
 
   void selectAsset(Asset entity) {
-    if (maxAssets != null && selectedCount >= maxAssets!) {
+    if (maxAssets != null && selectedCount > maxAssets!) {
       return;
     }
     provider?.selectAsset(entity);
@@ -461,20 +461,18 @@ class DefaultAssetPickerViewerBuilderDelegate
           final bool isSelected =
               (p?.currentlySelectedAssets ?? selectedAssets)?.contains(asset) ??
                   false;
-          String hint = '';
-          if (asset.type == AssetType.audio || asset.type == AssetType.video) {
-            hint += '${semanticsTextDelegate.sNameDurationLabel}: ';
-            hint += textDelegate.durationIndicatorBuilder(asset.videoDuration);
-          }
-          if (asset.title?.isNotEmpty ?? false) {
-            hint += ', ${asset.title}';
-          }
+          final labels = <String>[
+            '${semanticsTextDelegate.semanticTypeLabel(asset.type)}'
+                '${index + 1}',
+            asset.createDateTime.toString().replaceAll('.000', ''),
+            if (asset.type == AssetType.audio || asset.type == AssetType.video)
+              '${semanticsTextDelegate.sNameDurationLabel}: '
+                  '${semanticsTextDelegate.durationIndicatorBuilder(asset.videoDuration)}',
+            if (asset.title case final title? when title.isNotEmpty) title,
+          ];
           return Semantics(
-            label: '${semanticsTextDelegate.semanticTypeLabel(asset.type)}'
-                '${index + 1}, '
-                '${asset.createDateTime.toString().replaceAll('.000', '')}',
+            label: labels.join(', '),
             selected: isSelected,
-            hint: hint,
             image:
                 asset.type == AssetType.image || asset.type == AssetType.video,
             child: w,
@@ -736,10 +734,7 @@ class DefaultAssetPickerViewerBuilderDelegate
             Navigator.maybeOf(context)?.maybePop();
           },
           tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-          icon: Icon(
-            Icons.arrow_back_ios_new,
-            semanticLabel: MaterialLocalizations.of(context).backButtonTooltip,
-          ),
+          icon: const Icon(Icons.arrow_back_ios_new),
         ),
       ),
       centerTitle: true,
@@ -799,13 +794,17 @@ class DefaultAssetPickerViewerBuilderDelegate
           );
           Future<void> onPressed() async {
             if (isWeChatMoment && hasVideo) {
-              Navigator.maybeOf(context)?.pop(<AssetEntity>[currentAsset]);
+              if (await onChangingSelected(context, currentAsset, false)) {
+                Navigator.maybeOf(context)?.pop(<AssetEntity>[currentAsset]);
+              }
               return;
             }
+
             if (provider!.isSelectedNotEmpty) {
               Navigator.maybeOf(context)?.pop(provider.currentlySelectedAssets);
               return;
             }
+
             if (await onChangingSelected(context, currentAsset, false)) {
               Navigator.maybeOf(context)?.pop(
                 selectedAssets ?? <AssetEntity>[currentAsset],

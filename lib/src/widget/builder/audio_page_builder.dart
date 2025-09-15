@@ -141,9 +141,12 @@ class _AudioPageBuilderState extends State<AudioPageBuilder> {
   /// Title widget.
   /// 标题组件
   Widget get titleWidget {
-    return ScaleText(
-      widget.asset.title ?? '',
-      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.normal),
+    // Excluding audio title from semantics since the label already includes.
+    return ExcludeSemantics(
+      child: ScaleText(
+        widget.asset.title ?? '',
+        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.normal),
+      ),
     );
   }
 
@@ -198,7 +201,7 @@ class _AudioPageBuilderState extends State<AudioPageBuilder> {
       onLongPressHint:
           Singleton.textDelegate.semanticsTextDelegate.sActionPlayHint,
       child: ColoredBox(
-        color: context.theme.colorScheme.background,
+        color: context.theme.colorScheme.surface,
         child: isLoaded
             ? Column(
                 mainAxisAlignment: MainAxisAlignment.center,

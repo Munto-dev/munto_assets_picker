@@ -1,11 +1,11 @@
 name: wechat_assets_picker_demo
 description: The demo project for the wechat_assets_picker package.
-version: 9.3.3+61
+version: 9.8.0+69
 publish_to: none
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
-  flutter: ">=3.32.0"
+  sdk: ^3.4.0
+  flutter: '>=3.22.0'
 
 dependencies:
   flutter:
@@ -21,15 +21,17 @@ dependencies:
       url : https://github.com/Munto-dev/muntorial.git
 
   extended_image: ^10.0.1
-  package_info_plus: '>=5.0.0 <9.0.0'
+  intl: any
+  package_info_plus: '>=6.0.0 <9.0.0'
   path: ^1.8.0
   path_provider: ^2.0.15
-  provider: ^6.0.2
+  provider: any
 
 dev_dependencies:
   flutter_lints: any
 
 flutter:
   uses-material-design: true
+  generate: true
   assets:
     - assets/
