@@ -4,7 +4,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:wechat_assets_picker/wechat_assets_picker.dart';
+import 'package:munto_assets_picker/munto_assets_picker.dart';
+import 'package:muntorial/muntorial.dart';
 
 import 'constants/extensions.dart';
 import 'l10n/gen/app_localizations.dart';
@@ -27,21 +28,12 @@ void main() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  ThemeData _buildTheme(Brightness brightness) {
-    return ThemeData.from(
-      colorScheme: ColorScheme.fromSwatch(
-        primarySwatch: themeColor.swatch,
-        brightness: brightness,
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       onGenerateTitle: (context) => context.l10n.appTitle,
-      theme: _buildTheme(Brightness.light),
-      darkTheme: _buildTheme(Brightness.dark),
+      theme: MuntorialTheme.theme,
+      darkTheme: MuntorialTheme.theme,
       home: const SplashPage(),
       builder: (BuildContext c, Widget? w) {
         return ScrollConfiguration(
