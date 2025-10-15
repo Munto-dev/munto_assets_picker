@@ -1,13 +1,12 @@
-import 'package:flutter/material.dart';
-import 'package:muntorial/muntorial.dart';
+import 'package:muntorial/muntorial_v2.dart';
 
 class ConfirmButton extends StatelessWidget {
   const ConfirmButton({
-    Key? key,
+    super.key,
     required this.onPressed,
     required this.text,
     required this.isActive,
-  }) : super(key: key);
+  });
 
   final VoidCallback? onPressed;
   final String text;
@@ -15,22 +14,13 @@ class ConfirmButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onPressed,
-      child: Container(
-        //height: 32,
-        decoration: ShapeDecoration(
-          color: isActive ? MuntorialColors.red : MuntorialColors.grey700,
-          shape: const StadiumBorder(),
-        ),
-        padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 12),
-        child: Text(
-          text,
-          style: MuntorialTextStyles.size14SemiBold.singleLine.copyWith(
-            color: isActive ? MuntorialColors.white : MuntorialColors.grey500,
-          ),
-        ),
-      ),
+    return Button(
+      title: text,
+      onPressed: onPressed,
+      sizeType: SizeType.large,
+      colorType: ColorType.primary,
+      shapeType: ShapeType.round,
+      disable: !isActive,
     );
   }
 }
