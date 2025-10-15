@@ -21,6 +21,7 @@ class ConfirmButton extends StatelessWidget {
       colorType: ColorType.primary,
       shapeType: ShapeType.round,
       disable: !isActive,
+      hasBorder: false,
     );
   }
 }
