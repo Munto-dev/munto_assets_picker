@@ -28,6 +28,7 @@ import '../widget/asset_picker_app_bar.dart';
 import '../widget/asset_picker_page_route.dart';
 import '../widget/asset_picker_viewer.dart';
 import '../widget/builder/asset_entity_grid_item_builder.dart';
+import '../widget/confirm_button.dart';
 
 /// The delegate to build the whole picker's components.
 ///
@@ -1846,38 +1847,17 @@ class DefaultAssetPickerBuilderDelegate
         final bool isSelectedNotEmpty = p.isSelectedNotEmpty;
         final bool shouldAllowConfirm =
             isSelectedNotEmpty || p.previousSelectedAssets.isNotEmpty;
-        return MaterialButton(
-          minWidth: shouldAllowConfirm ? 48 : 20,
-          height: appBarItemHeight,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          color: theme.colorScheme.secondary,
-          disabledColor: theme.splashColor,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(3),
-          ),
+        return ConfirmButton(
           onPressed: shouldAllowConfirm
               ? () {
                   Navigator.maybeOf(context)?.maybePop(p.selectedAssets);
                 }
               : null,
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          child: ScaleText(
-            isSelectedNotEmpty && !isSingleAssetMode
-                ? '${textDelegate.confirm}'
-                    ' (${p.selectedAssets.length}/${p.maxAssets})'
-                : textDelegate.confirm,
-            style: TextStyle(
-              color: shouldAllowConfirm
-                  ? theme.textTheme.bodyLarge?.color
-                  : theme.textTheme.bodySmall?.color,
-              fontSize: 17,
-              fontWeight: FontWeight.normal,
-            ),
-            semanticsLabel: isSelectedNotEmpty && !isSingleAssetMode
-                ? '${semanticsTextDelegate.confirm}'
-                    ' (${p.selectedAssets.length}/${p.maxAssets})'
-                : semanticsTextDelegate.confirm,
-          ),
+          text: isSelectedNotEmpty && !isSingleAssetMode
+              ? '${textDelegate.confirm}'
+                  ' (${p.selectedAssets.length}/${p.maxAssets})'
+              : textDelegate.confirm,
+          isActive: shouldAllowConfirm,
         );
       },
     );
